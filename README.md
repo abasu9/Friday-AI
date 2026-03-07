@@ -1,7 +1,7 @@
 # Friday
 
 <div align="center">
-  <img src="docs/FRIDAY_logo.jpg" width="650" alt="Friday logo" />
+  <img src="docs/FRIDAY_logo.jpg" width="1250" alt="Friday logo" />
   <h1>Friday</h1>
   <p>
     Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries
