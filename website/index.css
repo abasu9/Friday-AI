@@ -182,6 +182,39 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; line-height
 .bento-card h3 { font-size: 1.4rem; margin-bottom: 12px; font-weight: 600;}
 .bento-card p { color: var(--text-secondary); font-size: 1.05rem; margin: 0; line-height: 1.6;}
 
+/* Tech Stack Section */
+.tech-stack { padding: 40px 24px 100px; max-width: 1000px; margin: 0 auto; }
+.tech-header { margin-bottom: 60px; }
+.tech-header h2 { font-size: clamp(2rem, 3.5vw, 2.5rem); margin-bottom: 16px; letter-spacing: -0.02em; color: var(--text-primary); }
+.tech-header p { font-size: 1.15rem; color: var(--text-secondary); }
+
+.tech-grid {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 48px;
+    flex-wrap: wrap;
+}
+.tech-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    opacity: 0.7;
+    filter: grayscale(100%);
+    transition: all 0.3s ease;
+}
+.tech-item:hover {
+    opacity: 1;
+    filter: grayscale(0%);
+    transform: translateY(-4px);
+}
+.tech-item span {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
 /* CTA - Clean Minimal */
 .cta-section { padding: 60px 24px 120px; max-width: 900px; margin: 0 auto; }
 .glass-card { background: white; border-radius: 32px; padding: 80px 40px; position: relative; border: 1px solid var(--border-glass); box-shadow: 0 10px 40px rgba(0,0,0,0.03);}
@@ -208,3 +241,16 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; line-height
     .nav-links { display: none; }
     .navbar-pill { padding: 0 8px 0 20px; width: 90%; }
 }
+
+/* Scroll Reveal Utilities */
+.scroll-reveal {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+.scroll-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+/* Allow adding manual delay inline for staggered elements */
