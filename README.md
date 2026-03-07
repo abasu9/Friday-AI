@@ -136,7 +136,7 @@ If you only need to test frontend rendering, you can run `pnpm run dev` from `fr
   - Whisper model options: `tiny`, `base`, `small`, `medium`, `large-v3` and more
 
 ## Repository links
-- Website documentation: `https://friday-michaelnaeims-projects.vercel.app?_vercel_share=ZhKcM7DirPn47AoBzr2bMNmVR9zcJnGn`
+- Website documentation: `https://tinyurl.com/2nvsk8ek`
 - Architecture details: `docs/architecture.md`
 - Build details: `docs/BUILDING.md`
 - Linux build notes: `docs/building_in_linux.md`
