@@ -1,16 +1,10 @@
 <h1>Friday</h1>
-  <p>
-    Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries. Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface.
-  </p>
-</div>
-<h1><a href="https://friday-michaelnaeims-projects.vercel.app/?_vercel_share=ZhKcM7DirPn47AoBzr2bMNmVR9zcJnGn">Friday</a></h1>
-
 <p>
-    Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries. Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface.
+    Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries. Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface. 
+  
+  Website Link: [tinyurl.com/2nvsk8ek](https://tinyurl.com/2nvsk8ek)
+
   </p>
-</div>
-<div align="center">
-  <img src="docs/FRIDAY_logo.jpg" width="1250" alt="Friday logo" />
 </div>
 
 
@@ -141,7 +135,6 @@ If you only need to test frontend rendering, you can run `pnpm run dev` from `fr
   - Whisper model options: `tiny`, `base`, `small`, `medium`, `large-v3` and more
 
 ## Repository links
-- Website demonstration: `https://friday-9z2emymz1-michaelnaeims-projects.vercel.app/`
 - Website documentation: `tinyurl.com/2nvsk8ek`
 - Architecture details: `docs/architecture.md`
 - Build details: `docs/BUILDING.md`
