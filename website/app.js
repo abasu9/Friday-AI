@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const triggerBox = document.getElementById('hero-video-trigger');
     const navWatchBtn = document.getElementById('nav-watch-btn');
     
-    const youtubeUrl = "https://www.youtube.com/embed/XqZsoesa55w?autoplay=1";
+    const youtubeUrl = "https://www.youtube.com/embed/QXsBkFJ8ack?autoplay=1";
 
     function openModal() {
         if(videoModal && youtubeIframe) {
