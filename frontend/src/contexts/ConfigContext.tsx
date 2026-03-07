@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { TranscriptModelProps } from '@/components/TranscriptSettings';
 import { SelectedDevices } from '@/components/DeviceSelection';
 import { configService, ModelConfig } from '@/services/configService';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke, safeListen, isTauriAvailable } from '@/lib/tauri-compat';
 import Analytics from '@/lib/analytics';
 import { BetaFeatures, BetaFeatureKey, loadBetaFeatures, saveBetaFeatures } from '@/types/betaFeatures';
 
@@ -180,7 +180,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     const loadModels = async () => {
       try {
         const endpoint = modelConfig.ollamaEndpoint || null;
-        const modelList = await invoke<OllamaModel[]>('get_ollama_models', { endpoint });
+        const modelList = await safeInvoke<OllamaModel[]>('get_ollama_models', { endpoint });
         setModels(modelList);
         setError('');
       } catch (err) {
@@ -214,7 +214,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   // Sync language preference to Rust on mount (fixes startup desync bug)
   useEffect(() => {
     if (selectedLanguage) {
-      invoke('set_language_preference', { language: selectedLanguage })
+      safeInvoke('set_language_preference', { language: selectedLanguage })
         .then(() => {
           console.log('[ConfigContext] Synced language preference to Rust on startup:', selectedLanguage);
         })
@@ -298,7 +298,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         const providers = ['claude', 'groq', 'openai', 'openrouter'];
         const keys = await Promise.all(
           providers.map(p =>
-            invoke<string>('api_get_api_key', { provider: p })
+            safeInvoke<string>('api_get_api_key', { provider: p })
               .catch(() => null) // Gracefully handle missing keys
           )
         );
@@ -321,8 +321,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   // Listen for model config updates from other components
   useEffect(() => {
     const setupListener = async () => {
-      const { listen } = await import('@tauri-apps/api/event');
-      const unlisten = await listen<ModelConfig>('model-config-updated', (event) => {
+      const unlisten = await safeListen<ModelConfig>('model-config-updated', (event) => {
         console.log('[ConfigContext] Received model-config-updated event:', event.payload);
         setModelConfig(event.payload);
 
@@ -429,7 +428,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       // Load notification settings from backend
       let settings: NotificationSettings | null = null;
       try {
-        settings = await invoke<NotificationSettings>('get_notification_settings');
+        settings = await safeInvoke<NotificationSettings>('get_notification_settings');
         setNotificationSettings(settings);
       } catch (notifError) {
         console.error('[ConfigContext] Failed to load notification settings:', notifError);
@@ -439,9 +438,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
       // Load storage locations
       const [dbDir, modelsDir, recordingsDir] = await Promise.all([
-        invoke<string>('get_database_directory'),
-        invoke<string>('whisper_get_models_directory'),
-        invoke<string>('get_default_recordings_folder_path')
+        safeInvoke<string>('get_database_directory'),
+        safeInvoke<string>('whisper_get_models_directory'),
+        safeInvoke<string>('get_default_recordings_folder_path')
       ]);
 
       setStorageLocations({
@@ -463,7 +462,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   // Update notification settings
   const updateNotificationSettings = useCallback(async (settings: NotificationSettings) => {
     try {
-      await invoke('set_notification_settings', { settings });
+      await safeInvoke('set_notification_settings', { settings });
       setNotificationSettings(settings);
     } catch (error) {
       console.error('[ConfigContext] Failed to update notification settings:', error);
@@ -478,7 +477,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('primaryLanguage', lang);
     }
     // Sync with Rust in-memory state for live recording
-    invoke('set_language_preference', { language: lang }).catch(err =>
+    safeInvoke('set_language_preference', { language: lang }).catch(err =>
       console.error('Failed to sync language preference to Rust:', err)
     );
   }, []);

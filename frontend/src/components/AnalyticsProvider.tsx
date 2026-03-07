@@ -2,7 +2,7 @@
 
 import React, { useEffect, ReactNode, useRef, useState, createContext } from 'react';
 import Analytics from '@/lib/analytics';
-import { load } from '@tauri-apps/plugin-store';
+import { isTauriAvailable } from '@/lib/tauri-compat';
 
 
 interface AnalyticsProviderProps {
@@ -30,6 +30,13 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     }
 
     const initAnalytics = async () => {
+      if (!isTauriAvailable()) {
+        // In browser mode, skip analytics entirely
+        console.log('[Analytics] Tauri not available — skipping analytics init');
+        initialized.current = true;
+        return;
+      }
+      const { load } = await import('@tauri-apps/plugin-store');
       const store = await load('analytics.json', {
         autoSave: false,
         defaults: {
@@ -63,6 +70,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
       const deviceInfo = await Analytics.getDeviceInfo();
 
       // Store platform info in analytics.json for quick access
+      const { load } = await import('@tauri-apps/plugin-store');
       const store = await load('analytics.json', {
         autoSave: false,
         defaults: {

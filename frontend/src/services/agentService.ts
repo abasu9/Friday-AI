@@ -1,5 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
-
 export interface AgentSettingsPayload {
   enabled: boolean;
   provider: string;
@@ -85,57 +83,99 @@ export interface AgentRecommendationActionResponse {
   created_calendar_event: CreatedCalendarEventSummary | null;
 }
 
+const isTauri = (): boolean =>
+  typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__;
+
+async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isTauri()) {
+    throw new Error("This feature requires the Friday desktop app (Tauri runtime not available).");
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(cmd, args);
+}
+
+const DEFAULT_SETTINGS: AgentSettingsPayload = {
+  enabled: false,
+  provider: "gemini",
+  model: "gemini-2.0-flash",
+  notifications_enabled: true,
+  calendar_proposals_enabled: false,
+  heartbeat_interval_minutes: 10,
+};
+
+const DEFAULT_STATUS: AgentStatusResponse = {
+  settings: DEFAULT_SETTINGS,
+  api_key_configured: false,
+  calendar_connected: false,
+  calendar_can_write: false,
+  is_running: false,
+  last_run_at: null,
+  last_success_at: null,
+  last_error: null,
+  pending_recommendations: 0,
+  open_tasks: 0,
+};
+
 class AgentService {
+  get available(): boolean {
+    return isTauri();
+  }
+
   async getStatus(): Promise<AgentStatusResponse> {
-    return invoke<AgentStatusResponse>('agent_get_status');
+    if (!isTauri()) return DEFAULT_STATUS;
+    return tauriInvoke<AgentStatusResponse>('agent_get_status');
   }
 
   async getSettings(): Promise<AgentSettingsPayload> {
-    return invoke<AgentSettingsPayload>('agent_get_settings');
+    if (!isTauri()) return DEFAULT_SETTINGS;
+    return tauriInvoke<AgentSettingsPayload>('agent_get_settings');
   }
 
   async setSettings(settings: AgentSettingsPayload): Promise<AgentStatusResponse> {
-    return invoke<AgentStatusResponse>('agent_set_settings', { settings });
+    return tauriInvoke<AgentStatusResponse>('agent_set_settings', { settings });
   }
 
   async saveGeminiApiKey(apiKey: string): Promise<void> {
-    return invoke('agent_save_gemini_api_key', { apiKey });
+    return tauriInvoke('agent_save_gemini_api_key', { apiKey });
   }
 
   async clearGeminiApiKey(): Promise<void> {
-    return invoke('agent_clear_gemini_api_key');
+    return tauriInvoke('agent_clear_gemini_api_key');
   }
 
   async runHeartbeatNow(): Promise<AgentStatusResponse> {
-    return invoke<AgentStatusResponse>('agent_run_heartbeat_now');
+    return tauriInvoke<AgentStatusResponse>('agent_run_heartbeat_now');
   }
 
   async listRecommendations(status?: string): Promise<AgentRecommendation[]> {
-    return invoke<AgentRecommendation[]>('agent_list_recommendations', { status: status ?? null });
+    if (!isTauri()) return [];
+    return tauriInvoke<AgentRecommendation[]>('agent_list_recommendations', { status: status ?? null });
   }
 
   async acceptRecommendation(recommendationId: string): Promise<AgentRecommendationActionResponse> {
-    return invoke<AgentRecommendationActionResponse>('agent_accept_recommendation', { recommendationId });
+    return tauriInvoke<AgentRecommendationActionResponse>('agent_accept_recommendation', { recommendationId });
   }
 
   async dismissRecommendation(recommendationId: string): Promise<AgentRecommendation> {
-    return invoke<AgentRecommendation>('agent_dismiss_recommendation', { recommendationId });
+    return tauriInvoke<AgentRecommendation>('agent_dismiss_recommendation', { recommendationId });
   }
 
   async listMemory(limit = 25): Promise<AgentMemoryItem[]> {
-    return invoke<AgentMemoryItem[]>('agent_list_memory', { limit });
+    if (!isTauri()) return [];
+    return tauriInvoke<AgentMemoryItem[]>('agent_list_memory', { limit });
   }
 
   async getMeetingContext(meetingId: string): Promise<AgentMeetingContextResponse> {
-    return invoke<AgentMeetingContextResponse>('agent_get_meeting_context', { meetingId });
+    return tauriInvoke<AgentMeetingContextResponse>('agent_get_meeting_context', { meetingId });
   }
 
   async listTasks(status?: string): Promise<AgentTask[]> {
-    return invoke<AgentTask[]>('agent_list_tasks', { status: status ?? null });
+    if (!isTauri()) return [];
+    return tauriInvoke<AgentTask[]>('agent_list_tasks', { status: status ?? null });
   }
 
   async updateTaskStatus(taskId: string, status: string): Promise<AgentTask[]> {
-    return invoke<AgentTask[]>('agent_update_task_status', { taskId, status });
+    return tauriInvoke<AgentTask[]>('agent_update_task_status', { taskId, status });
   }
 }
 

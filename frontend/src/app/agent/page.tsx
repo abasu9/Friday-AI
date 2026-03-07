@@ -143,6 +143,8 @@ export default function AgentInboxPage() {
     }
   };
 
+  const isBrowserOnly = typeof window !== "undefined" && !(window as any).__TAURI_INTERNALS__;
+
   return (
     <div className="h-screen overflow-y-auto bg-background text-foreground">
       <div className="sticky top-0 z-10 bg-background border-b border-border">
@@ -165,7 +167,7 @@ export default function AgentInboxPage() {
               </p>
             </div>
           </div>
-          <Button variant="outline" onClick={runNow} disabled={isRunning || status?.is_running}>
+          <Button variant="outline" onClick={runNow} disabled={isBrowserOnly || isRunning || status?.is_running}>
             <RefreshCw className={`h-4 w-4 ${(isRunning || status?.is_running) ? "animate-spin" : ""}`} />
             {isRunning || status?.is_running ? "Running..." : "Run now"}
           </Button>
@@ -173,6 +175,15 @@ export default function AgentInboxPage() {
       </div>
 
       <div className="max-w-6xl mx-auto p-8 space-y-6">
+        {isBrowserOnly && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              The Agent Inbox requires the Friday desktop app (Tauri). In browser mode, use the{" "}
+              <strong>Notifications panel</strong> (bell icon in the sidebar) to see agent activity from the Python backend.
+            </span>
+          </div>
+        )}
         {isLoading ? (
           <div className="rounded-lg border border-border bg-card p-6">Loading agent inbox...</div>
         ) : (

@@ -1,4 +1,13 @@
-import { invoke } from '@tauri-apps/api/core';
+const isTauri = (): boolean =>
+  typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__;
+
+async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isTauri()) {
+    throw new Error("Google Calendar requires the Friday desktop app (Tauri runtime not available).");
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(cmd, args);
+}
 
 export interface CalendarAccountSummary {
   email: string | null;
@@ -71,41 +80,51 @@ export interface UpcomingCalendarEvent {
   html_link: string | null;
 }
 
+const DEFAULT_STATUS: CalendarStatusResponse = {
+  client_configured: false,
+  connected: false,
+  can_write: false,
+  syncing: false,
+  account: null,
+};
+
 class CalendarService {
   async getStatus(): Promise<CalendarStatusResponse> {
-    return invoke<CalendarStatusResponse>('calendar_get_status');
+    if (!isTauri()) return DEFAULT_STATUS;
+    return tauriInvoke<CalendarStatusResponse>('calendar_get_status');
   }
 
   async listUpcoming(): Promise<UpcomingCalendarEvent[]> {
-    return invoke<UpcomingCalendarEvent[]>('calendar_list_upcoming');
+    if (!isTauri()) return [];
+    return tauriInvoke<UpcomingCalendarEvent[]>('calendar_list_upcoming');
   }
 
   async connectGoogle(writeAccess = false): Promise<CalendarStatusResponse> {
-    return invoke<CalendarStatusResponse>('calendar_connect_google', {
+    return tauriInvoke<CalendarStatusResponse>('calendar_connect_google', {
       writeAccess,
     });
   }
 
   async upgradeGoogleAccess(): Promise<CalendarStatusResponse> {
-    return invoke<CalendarStatusResponse>('calendar_upgrade_google_access');
+    return tauriInvoke<CalendarStatusResponse>('calendar_upgrade_google_access');
   }
 
   async disconnectGoogle(): Promise<CalendarStatusResponse> {
-    return invoke<CalendarStatusResponse>('calendar_disconnect_google');
+    return tauriInvoke<CalendarStatusResponse>('calendar_disconnect_google');
   }
 
   async syncNow(): Promise<CalendarSyncResult> {
-    return invoke<CalendarSyncResult>('calendar_sync_now');
+    return tauriInvoke<CalendarSyncResult>('calendar_sync_now');
   }
 
   async getMeetingLink(meetingId: string): Promise<LinkedCalendarEvent | null> {
-    return invoke<LinkedCalendarEvent | null>('calendar_get_meeting_link', {
+    return tauriInvoke<LinkedCalendarEvent | null>('calendar_get_meeting_link', {
       meetingId,
     });
   }
 
   async getLinkCandidates(meetingId: string): Promise<CalendarLinkCandidate[]> {
-    return invoke<CalendarLinkCandidate[]>('calendar_get_link_candidates', {
+    return tauriInvoke<CalendarLinkCandidate[]>('calendar_get_link_candidates', {
       meetingId,
     });
   }
@@ -114,14 +133,14 @@ class CalendarService {
     meetingId: string,
     providerEventId: string
   ): Promise<LinkedCalendarEvent | null> {
-    return invoke<LinkedCalendarEvent | null>('calendar_set_meeting_link', {
+    return tauriInvoke<LinkedCalendarEvent | null>('calendar_set_meeting_link', {
       meetingId,
       providerEventId,
     });
   }
 
   async clearMeetingLink(meetingId: string): Promise<void> {
-    return invoke('calendar_clear_meeting_link', { meetingId });
+    return tauriInvoke('calendar_clear_meeting_link', { meetingId });
   }
 }
 

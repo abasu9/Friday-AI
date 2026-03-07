@@ -1,4 +1,10 @@
-import { invoke } from '@tauri-apps/api/core';
+import { isTauriAvailable } from '@/lib/tauri-compat';
+
+const tauriInvoke = async <T = any>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+  if (!isTauriAvailable()) throw new Error('Tauri not available');
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+};
 
 export interface AnalyticsProperties {
   [key: string]: string;
@@ -43,7 +49,7 @@ export class Analytics {
 
   private static async doInit(): Promise<void> {
     try {
-      await invoke('init_analytics');
+      await tauriInvoke('init_analytics');
       this.initialized = true;
       console.log('Analytics initialized successfully');
     } catch (error) {
@@ -56,7 +62,7 @@ export class Analytics {
 
   static async disable(): Promise<void> {
     try {
-      await invoke('disable_analytics');
+      await tauriInvoke('disable_analytics');
       this.initialized = false;
       this.currentUserId = null;
       this.initializationPromise = null;
@@ -68,7 +74,7 @@ export class Analytics {
 
   static async isEnabled(): Promise<boolean> {
     try {
-      return await invoke('is_analytics_enabled');
+      return await tauriInvoke('is_analytics_enabled');
     } catch (error) {
       console.error('Failed to check analytics status:', error);
       return false;
@@ -82,7 +88,7 @@ export class Analytics {
     }
 
     try {
-      await invoke('track_event', { eventName, properties });
+      await tauriInvoke('track_event', { eventName, properties });
     } catch (error) {
       console.error(`Failed to track event ${eventName}:`, error);
     }
@@ -95,7 +101,7 @@ export class Analytics {
     }
 
     try {
-      await invoke('identify_user', { userId, properties });
+      await tauriInvoke('identify_user', { userId, properties });
       this.currentUserId = userId;
     } catch (error) {
       console.error(`Failed to identify user ${userId}:`, error);
@@ -110,7 +116,7 @@ export class Analytics {
     }
 
     try {
-      const sessionId = await invoke('start_analytics_session', { userId });
+      const sessionId = await tauriInvoke('start_analytics_session', { userId });
       this.currentUserId = userId;
       
       return sessionId as string;
@@ -124,7 +130,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('end_analytics_session');
+      await tauriInvoke('end_analytics_session');
     } catch (error) {
       console.error('Failed to end analytics session:', error);
     }
@@ -134,7 +140,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('track_daily_active_user');
+      await tauriInvoke('track_daily_active_user');
     } catch (error) {
       console.error('Failed to track daily active user:', error);
     }
@@ -144,7 +150,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('track_user_first_launch');
+      await tauriInvoke('track_user_first_launch');
     } catch (error) {
       console.error('Failed to track user first launch:', error);
     }
@@ -154,7 +160,7 @@ export class Analytics {
     if (!this.initialized) return false;
 
     try {
-      return await invoke('is_analytics_session_active');
+      return await tauriInvoke('is_analytics_session_active');
     } catch (error) {
       console.error('Failed to check session status:', error);
       return false;
@@ -535,7 +541,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('track_meeting_started', { meetingId, meetingTitle });
+      await tauriInvoke('track_meeting_started', { meetingId, meetingTitle });
     } catch (error) {
       console.error('Failed to track meeting started:', error);
     }
@@ -545,7 +551,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('track_recording_started', { meetingId });
+      await tauriInvoke('track_recording_started', { meetingId });
     } catch (error) {
       console.error('Failed to track recording started:', error);
     }
@@ -555,7 +561,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('track_recording_stopped', { meetingId, durationSeconds });
+      await tauriInvoke('track_recording_stopped', { meetingId, durationSeconds });
     } catch (error) {
       console.error('Failed to track recording stopped:', error);
     }
@@ -565,7 +571,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('track_meeting_deleted', { meetingId });
+      await tauriInvoke('track_meeting_deleted', { meetingId });
     } catch (error) {
       console.error('Failed to track meeting deleted:', error);
     }
@@ -575,7 +581,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('track_settings_changed', { settingType, newValue });
+      await tauriInvoke('track_settings_changed', { settingType, newValue });
     } catch (error) {
       console.error('Failed to track settings changed:', error);
     }
@@ -585,7 +591,7 @@ export class Analytics {
     if (!this.initialized) return;
 
     try {
-      await invoke('track_feature_used', { featureName });
+      await tauriInvoke('track_feature_used', { featureName });
     } catch (error) {
       console.error('Failed to track feature used:', error);
     }
@@ -652,7 +658,7 @@ export class Analytics {
 
     try {
       console.log('Tracking backend connection event:', { success, error });
-      await invoke('track_event', {
+      await tauriInvoke('track_event', {
         eventName: 'backend_connection',
         properties: {
           success: success.toString(),
@@ -675,7 +681,7 @@ export class Analytics {
 
     try {
       console.log('Tracking transcription error event:', { errorMessage });
-      await invoke('track_event', {
+      await tauriInvoke('track_event', {
         eventName: 'transcription_error',
         properties: {
           error_message: errorMessage,
@@ -697,7 +703,7 @@ export class Analytics {
 
     try {
       console.log('Tracking transcription success event:', { duration });
-      await invoke('track_event', {
+      await tauriInvoke('track_event', {
         eventName: 'transcription_success',
         properties: {
           duration: duration ? duration.toString() : '',
@@ -764,7 +770,7 @@ export class Analytics {
 
     try {
       console.log('Tracking summary generation completed event:', { modelProvider, modelName, success, durationSeconds, errorMessage });
-      await invoke('track_summary_generation_completed', {
+      await tauriInvoke('track_summary_generation_completed', {
         modelProvider,
         modelName,
         success,
@@ -785,7 +791,7 @@ export class Analytics {
 
     try {
       console.log('Tracking summary regenerated event:', { modelProvider, modelName });
-      await invoke('track_summary_regenerated', {
+      await tauriInvoke('track_summary_regenerated', {
         modelProvider,
         modelName
       });
@@ -803,7 +809,7 @@ export class Analytics {
 
     try {
       console.log('Tracking model changed event:', { oldProvider, oldModel, newProvider, newModel });
-      await invoke('track_model_changed', {
+      await tauriInvoke('track_model_changed', {
         oldProvider,
         oldModel,
         newProvider,
@@ -823,7 +829,7 @@ export class Analytics {
 
     try {
       console.log('Tracking custom prompt used event:', { promptLength });
-      await invoke('track_custom_prompt_used', {
+      await tauriInvoke('track_custom_prompt_used', {
         promptLength
       });
       console.log('Custom prompt used event tracked successfully');

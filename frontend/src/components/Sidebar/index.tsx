@@ -10,7 +10,7 @@ import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SettingTabs } from '../SettingTabs';
 import { TranscriptModelProps } from '@/components/TranscriptSettings';
 import Analytics from '@/lib/analytics';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke, safeListen, isTauriAvailable } from '@/lib/tauri-compat';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
@@ -118,12 +118,12 @@ const Sidebar: React.FC = () => {
       }
 
       try {
-        const data = await invoke('api_get_model_config') as any;
+        const data = await safeInvoke('api_get_model_config') as any;
         if (data && data.provider !== null) {
           // Fetch API key if not included and provider requires it
           if (data.provider !== 'ollama' && !data.apiKey) {
             try {
-              const apiKeyData = await invoke('api_get_api_key', {
+              const apiKeyData = await safeInvoke('api_get_api_key', {
                 provider: data.provider
               }) as string;
               data.apiKey = apiKeyData;
@@ -152,7 +152,7 @@ const Sidebar: React.FC = () => {
       }
 
       try {
-        const data = await invoke('api_get_transcript_config') as any;
+        const data = await safeInvoke('api_get_transcript_config') as any;
         if (data && data.provider !== null) {
           setTranscriptModelConfig(data);
         }
@@ -166,8 +166,7 @@ const Sidebar: React.FC = () => {
   // Listen for model config updates from other components
   useEffect(() => {
     const setupListener = async () => {
-      const { listen } = await import('@tauri-apps/api/event');
-      const unlisten = await listen<ModelConfig>('model-config-updated', (event) => {
+      const unlisten = await safeListen<ModelConfig>('model-config-updated', (event) => {
         console.log('Sidebar received model-config-updated event:', event.payload);
         setModelConfig(event.payload);
       });
@@ -188,7 +187,7 @@ const Sidebar: React.FC = () => {
   // Handle model config save
   const handleSaveModelConfig = async (config: ModelConfig) => {
     try {
-      await invoke('api_save_model_config', {
+      await safeInvoke('api_save_model_config', {
         provider: config.provider,
         model: config.model,
         whisperModel: config.whisperModel,
@@ -201,8 +200,10 @@ const Sidebar: React.FC = () => {
       setSettingsSaveSuccess(true);
 
       // Emit event to sync other components
-      const { emit } = await import('@tauri-apps/api/event');
-      await emit('model-config-updated', config);
+      if (isTauriAvailable()) {
+        const { emit } = await import('@tauri-apps/api/event');
+        await emit('model-config-updated', config);
+      }
 
       // Track settings change
       await Analytics.trackSettingsChanged('model_config', `${config.provider}_${config.model}`);
@@ -222,7 +223,7 @@ const Sidebar: React.FC = () => {
       };
       console.log('Saving transcript config with payload:', payload);
 
-      await invoke('api_save_transcript_config', {
+      await safeInvoke('api_save_transcript_config', {
         provider: payload.provider,
         model: payload.model,
         apiKey: payload.apiKey,
@@ -328,8 +329,7 @@ const Sidebar: React.FC = () => {
     };
 
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('api_delete_meeting', {
+      await safeInvoke('api_delete_meeting', {
         meetingId: itemId,
       });
       console.log('Meeting deleted successfully');
@@ -387,7 +387,7 @@ const Sidebar: React.FC = () => {
     }
 
     try {
-      await invoke('api_save_meeting_title', {
+      await safeInvoke('api_save_meeting_title', {
         meetingId: meetingId,
         title: newTitle,
       });

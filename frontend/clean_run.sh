@@ -38,6 +38,12 @@ pnpm run build
 
 # Set environment variables for the build
 echo "Setting up build environment..."
+if [ -f .env ]; then
+  echo "Loading .env..."
+  set -a
+  source .env
+  set +a
+fi
 
 echo "Building Tauri app..."
 pnpm run tauri dev

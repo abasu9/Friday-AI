@@ -5,7 +5,7 @@
  * Pure 1-to-1 wrapper - no error handling changes, exact same behavior as direct invoke calls.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/lib/tauri-compat';
 import { TranscriptModelProps } from '@/components/TranscriptSettings';
 
 export interface ModelConfig {
@@ -51,7 +51,7 @@ export class ConfigService {
    * @returns Promise with { provider, model, apiKey }
    */
   async getTranscriptConfig(): Promise<TranscriptModelProps> {
-    return invoke<TranscriptModelProps>('api_get_transcript_config');
+    return safeInvoke<TranscriptModelProps>('api_get_transcript_config');
   }
 
   /**
@@ -59,7 +59,7 @@ export class ConfigService {
    * @returns Promise with { provider, model, whisperModel }
    */
   async getModelConfig(): Promise<ModelConfig> {
-    return invoke<ModelConfig>('api_get_model_config');
+    return safeInvoke<ModelConfig>('api_get_model_config');
   }
 
   /**
@@ -67,7 +67,7 @@ export class ConfigService {
    * @returns Promise with { preferred_mic_device, preferred_system_device }
    */
   async getRecordingPreferences(): Promise<RecordingPreferences> {
-    return invoke<RecordingPreferences>('get_recording_preferences');
+    return safeInvoke<RecordingPreferences>('get_recording_preferences');
   }
 
   /**
@@ -75,7 +75,7 @@ export class ConfigService {
    * @returns Promise with CustomOpenAIConfig or null if not configured
    */
   async getCustomOpenAIConfig(): Promise<CustomOpenAIConfig | null> {
-    return invoke<CustomOpenAIConfig | null>('api_get_custom_openai_config');
+    return safeInvoke<CustomOpenAIConfig | null>('api_get_custom_openai_config');
   }
 
   /**
@@ -84,7 +84,7 @@ export class ConfigService {
    * @returns Promise with result status
    */
   async saveCustomOpenAIConfig(config: CustomOpenAIConfig): Promise<{ status: string; message: string }> {
-    return invoke<{ status: string; message: string }>('api_save_custom_openai_config', {
+    return safeInvoke<{ status: string; message: string }>('api_save_custom_openai_config', {
       endpoint: config.endpoint,
       apiKey: config.apiKey,
       model: config.model,
@@ -106,7 +106,7 @@ export class ConfigService {
     apiKey: string | null,
     model: string
   ): Promise<{ status: string; message: string; http_status?: number }> {
-    return invoke<{ status: string; message: string; http_status?: number }>('api_test_custom_openai_connection', {
+    return safeInvoke<{ status: string; message: string; http_status?: number }>('api_test_custom_openai_connection', {
       endpoint,
       apiKey,
       model,

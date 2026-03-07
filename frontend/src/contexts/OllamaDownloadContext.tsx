@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { safeListen } from '@/lib/tauri-compat';
 import { toast } from 'sonner';
 
 /**
@@ -48,7 +48,7 @@ export function OllamaDownloadProvider({ children }: { children: React.ReactNode
     const setupListeners = async () => {
       try {
         // Download progress
-        const unlistenProgress = await listen<{ modelName: string; progress: number }>(
+        const unlistenProgress = await safeListen<{ modelName: string; progress: number }>(
           'ollama-model-download-progress',
           (event) => {
             const { modelName, progress } = event.payload;
@@ -72,7 +72,7 @@ export function OllamaDownloadProvider({ children }: { children: React.ReactNode
         unsubscribers.push(unlistenProgress);
 
         // Download complete
-        const unlistenComplete = await listen<{ modelName: string }>(
+        const unlistenComplete = await safeListen<{ modelName: string }>(
           'ollama-model-download-complete',
           (event) => {
             const { modelName } = event.payload;
@@ -100,7 +100,7 @@ export function OllamaDownloadProvider({ children }: { children: React.ReactNode
         unsubscribers.push(unlistenComplete);
 
         // Download error
-        const unlistenError = await listen<{ modelName: string; error: string }>(
+        const unlistenError = await safeListen<{ modelName: string; error: string }>(
           'ollama-model-download-error',
           (event) => {
             const { modelName, error } = event.payload;

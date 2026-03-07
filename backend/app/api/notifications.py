@@ -73,3 +73,31 @@ async def mark_all_read():
         if n["status"] == "unread":
             n["status"] = "read"
     return {"status": "ok"}
+
+
+@router.post("/seed-test")
+async def seed_test_notifications():
+    """DEV ONLY: Create sample notifications for UI testing."""
+    store.add_notification({
+        "type": "action_taken",
+        "title": "Sent follow-up email",
+        "message": "Sent meeting recap to team@company.com with action items from standup",
+    })
+    store.add_notification({
+        "type": "info",
+        "title": "Processed 'Team Standup'",
+        "message": "Found 3 action items, created 2 calendar events, sent 1 email",
+        "meeting_id": "meeting-123",
+    })
+    store.add_notification({
+        "type": "question",
+        "title": "Agent needs your input",
+        "message": "Who should I assign the design review to? The transcript mentions 'the design team' but no specific person.",
+        "session_id": "proactive-meeting-123",
+    })
+    store.add_notification({
+        "type": "error",
+        "title": "Error processing 'Client Call'",
+        "message": "Gmail API rate limit reached. Will retry in 5 minutes.",
+    })
+    return {"status": "seeded", "count": store.get_unread_count()}
