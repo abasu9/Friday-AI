@@ -10,6 +10,7 @@ Each phase builds on the previous. Verify before moving on.
 - [ ] Initialize project: `uv init`, FastAPI, pyproject.toml
 - [ ] Set up project structure (see 08-api.md for layout)
 - [ ] Configure Supabase client (connection, env vars)
+- [ ] Configure Supabase Auth with Google as provider (in Supabase Dashboard)
 - [ ] Create `/health` endpoint
 - [ ] Create basic SSE streaming endpoint (`/chat/stream` that echoes)
 - [ ] Verify: `curl` the SSE endpoint, see events streaming
@@ -48,14 +49,14 @@ backend/
 - [ ] Wire up Supabase checkpointer
 - [ ] Verify: Send message → get classified intent → get response → see in DB
 
-### Phase 4: Tools — Google Workspace (Hours 5-7)
+### Phase 4: Tools — Google Workspace (Composio) (Hours 5-7)
 > Agent can read emails and calendar.
 
-- [ ] Set up MCP Google Workspace connection
-- [ ] Implement `gmail_read_inbox` tool
-- [ ] Implement `calendar_list_events` tool
-- [ ] Implement `docs_read` tool
-- [ ] Implement `drive_search` tool
+- [ ] Set up Composio toolset with Google Workspace actions
+- [ ] Configure Composio Gmail actions (read, send)
+- [ ] Configure Composio Calendar actions (list, create)
+- [ ] Configure Composio Docs actions (read)
+- [ ] Configure Composio Drive actions (search)
 - [ ] Implement `execute_tools` node in the graph
 - [ ] Wire tools to intent routing (action/triage intents trigger tools)
 - [ ] Verify: "What's on my calendar today?" → real calendar data returned
@@ -66,6 +67,7 @@ backend/
 - [ ] Implement `get_user_tasks` tool
 - [ ] Implement `create_task` / `update_task` tools
 - [ ] Implement `get_user_context` / `save_user_context` tools
+- [ ] Set up Supermemory client and memory_search / memory_store tools
 - [ ] Verify: "Create a task to review PR" → task appears in DB
 
 ### Phase 6: Prompt Engineering (Hour 8-9)
@@ -144,11 +146,11 @@ SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_KEY=eyJ...         # Service role key (bypasses RLS)
 SUPABASE_ANON_KEY=eyJ...            # Anon key (for client-side)
 
-ANTHROPIC_API_KEY=sk-ant-...         # Claude API
+GEMINI_API_KEY=your-gemini-key       # Google Gemini API
 
-GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-...
-GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
+COMPOSIO_API_KEY=your-composio-key   # Composio agent tools
+SUPERMEMORY_API_KEY=your-key         # Supermemory semantic memory
+# Google OAuth is configured in Supabase Dashboard (not env vars)
 
 # Optional
 LOG_LEVEL=INFO
@@ -167,7 +169,9 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "langgraph>=0.2",
-    "langchain-anthropic>=0.3",
+    "langchain-google-genai>=2.0",
+    "google-genai>=1.0.0",
+    "composio-langgraph>=0.6",
     "langchain-core>=0.3",
     "supabase>=2.0",
     "pydantic>=2.0",

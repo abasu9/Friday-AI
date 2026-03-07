@@ -9,10 +9,10 @@ FRIDAY is an AI-native workspace orchestrator for people with ADHD. The core pro
 | # | File | Contents |
 |---|------|----------|
 | 01 | [Vision & User Stories](./01-vision.md) | Problem statement, personas, user stories, demo flow |
-| 02 | [System Architecture](./02-architecture.md) | High-level architecture, LangGraph StateGraph, FastAPI, Supabase, MCP |
+| 02 | [System Architecture](./02-architecture.md) | High-level architecture, LangGraph StateGraph, FastAPI, Supabase, Composio, Supermemory |
 | 03 | [Database Schema](./03-database-schema.md) | Complete Supabase schema — tables, indexes, types, RLS |
 | 04 | [LangGraph State Machine](./04-langgraph.md) | Nodes, edges, conditional routing, state definition |
-| 05 | [Agent Tools](./05-tools.md) | MCP Google Workspace + custom Supabase tools |
+| 05 | [Agent Tools](./05-tools.md) | Composio Google Workspace + Supermemory + custom Supabase tools |
 | 06 | [Prompt Engineering](./06-prompts.md) | System prompt, tool descriptions, context injection layers |
 | 07 | [Structured Output](./07-schemas.md) | Pydantic models for all agent responses |
 | 08 | [API & Streaming](./08-api.md) | FastAPI endpoints, SSE streaming, heartbeat loop |
@@ -33,8 +33,11 @@ We use a **custom LangGraph StateGraph** (not `create_react_agent`) because:
 | Agent Framework | LangGraph (custom StateGraph) |
 | API Server | FastAPI |
 | Database | Supabase Postgres |
-| LLM | Claude (Anthropic) |
-| Tools | MCP Google Workspace, custom Supabase tools |
+| LLM | Gemini (Google DeepMind) |
+| Google Tools | Composio (pre-built LangGraph-compatible Google Workspace tools) |
+| Internal Tools | Custom Supabase tools (tasks, context, preferences) |
+| Memory/RAG | Supermemory (semantic memory for patterns, entities, commitments) |
+| Auth | Supabase Auth (Google OAuth provider) |
 | Streaming | Server-Sent Events (SSE) |
 | Validation | Pydantic v2 |
 

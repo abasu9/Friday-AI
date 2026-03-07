@@ -2,9 +2,12 @@
 
 ## Tool Architecture
 
-Tools are organized in two categories:
-1. **MCP Google Workspace** — External tools via Model Context Protocol
-2. **Custom Supabase Tools** — Internal tools for state management
+Tools are organized in three categories:
+1. **Composio Google Workspace** — Pre-built LangGraph-compatible tools via Composio
+2. **Supermemory Tools** — Semantic memory search and storage
+3. **Custom Supabase Tools** — Internal tools for operational state management
+
+> **Why Composio?** Gemini + Google Workspace + Composio share the Google ecosystem. Composio provides pre-built `@tool` wrappers that work with LangGraph out of the box — no manual Google API code needed. Composio handles per-user OAuth via its entity system.
 
 All tools follow a consistent interface:
 
@@ -21,9 +24,9 @@ class ToolResult(BaseModel):
     duration_ms: int | None = None
 ```
 
-## MCP Google Workspace Tools
+## Composio Google Workspace Tools
 
-These connect via MCP to Google Workspace APIs. The user's OAuth refresh token is stored in the `users` table.
+These are pre-built tools from Composio's Google Workspace integration. Composio handles per-user Google OAuth and token management via its entity system. User identity is managed by Supabase Auth.
 
 ### gmail_read_inbox
 ```python
@@ -212,6 +215,48 @@ async def save_user_context(
     """
 ```
 
+## Supermemory Tools
+
+These connect to Supermemory's RAG API for semantic memory operations.
+
+### memory_search
+```python
+@tool
+async def memory_search(
+    query: str = Field(description="Natural language search query"),
+    memory_types: list[str] | None = Field(default=None, description="Filter by type: pattern, commitment, entity, summary"),
+    limit: int = Field(default=5, description="Max memories to return"),
+) -> list[dict]:
+    """Search the user's semantic memory for relevant context.
+
+    Returns memories ranked by relevance: patterns, commitments, meeting summaries,
+    entity relationships, and learned behaviors.
+
+    Use this BEFORE giving advice — check what FRIDAY has learned about the user.
+    Prefer this over get_user_context for nuanced, cross-session context.
+    """
+```
+
+### memory_store
+```python
+@tool
+async def memory_store(
+    content: str = Field(description="The memory content to store"),
+    memory_type: str = Field(description="Type: pattern, commitment, entity, summary, preference"),
+    metadata: dict | None = Field(default=None, description="Additional context (source session, confidence, etc.)"),
+) -> dict:
+    """Store a new memory in the user's semantic memory.
+
+    Use this to save:
+    - Patterns: "User always ignores marketing emails"
+    - Commitments: "User promised to send report by Friday"
+    - Entities: "Sarah = user's manager, works on API team"
+    - Summaries: "Meeting about Q3 planning discussed budget cuts"
+
+    Be selective — only store clear, repeated patterns or explicit commitments.
+    """
+```
+
 ## Tool-to-Intent Mapping
 
 ```python
@@ -219,6 +264,7 @@ TOOL_INTENT_MAP = {
     "chat": [
         get_user_tasks,
         get_user_context,
+        memory_search,
     ],
     "action": [
         gmail_read_inbox,
@@ -232,12 +278,15 @@ TOOL_INTENT_MAP = {
         update_task,
         get_user_context,
         save_user_context,
+        memory_search,
+        memory_store,
     ],
     "triage": [
         gmail_read_inbox,
         calendar_list_events,
         get_user_tasks,
         get_user_context,
+        memory_search,
     ],
     "proactive": [
         gmail_read_inbox,
@@ -245,6 +294,8 @@ TOOL_INTENT_MAP = {
         get_user_tasks,
         get_user_context,
         create_task,
+        memory_search,
+        memory_store,
     ],
 }
 

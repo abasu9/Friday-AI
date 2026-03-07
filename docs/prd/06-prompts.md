@@ -21,7 +21,7 @@ def build_system_prompt(state: FridayState) -> str:
 ## Layer 1: Environment
 
 ```python
-ENVIRONMENT_LAYER = """You are powered by Claude. Current date: {date}.
+ENVIRONMENT_LAYER = """You are powered by Gemini. Current date: {date}.
 User timezone: {timezone}.
 
 Capabilities:
