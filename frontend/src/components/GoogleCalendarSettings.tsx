@@ -23,6 +23,7 @@ export function GoogleCalendarSettings() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [isUpgradingAccess, setIsUpgradingAccess] = useState(false);
   const hasAccount = Boolean(status?.account);
 
   const loadStatus = useCallback(async () => {
@@ -44,7 +45,7 @@ export function GoogleCalendarSettings() {
   const handleConnect = async () => {
     setIsConnecting(true);
     try {
-      const nextStatus = await calendarService.connectGoogle();
+      const nextStatus = await calendarService.connectGoogle(false);
       setStatus(nextStatus);
       toast.success("Google Calendar connected");
     } catch (error) {
@@ -88,6 +89,22 @@ export function GoogleCalendarSettings() {
       });
     } finally {
       setIsDisconnecting(false);
+    }
+  };
+
+  const handleUpgradeAccess = async () => {
+    setIsUpgradingAccess(true);
+    try {
+      const nextStatus = await calendarService.upgradeGoogleAccess();
+      setStatus(nextStatus);
+      toast.success("Google Calendar write access enabled");
+    } catch (error) {
+      console.error("Failed to upgrade Google Calendar access:", error);
+      toast.error("Failed to upgrade Google Calendar access", {
+        description: String(error),
+      });
+    } finally {
+      setIsUpgradingAccess(false);
     }
   };
 
@@ -146,6 +163,10 @@ export function GoogleCalendarSettings() {
               <div className="font-medium text-gray-900">Scope</div>
               <div>{status.account.scopes.join(", ") || "None"}</div>
             </div>
+            <div>
+              <div className="font-medium text-gray-900">Write access</div>
+              <div>{status.can_write ? "Enabled" : "Read-only"}</div>
+            </div>
           </div>
           {status.account.last_error && (
             <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -185,6 +206,11 @@ export function GoogleCalendarSettings() {
               <RefreshCw className={`h-4 w-4 ${isSyncing || status.syncing ? "animate-spin" : ""}`} />
               {isSyncing || status.syncing ? "Syncing..." : "Sync now"}
             </Button>
+            {!status.can_write && (
+              <Button variant="outline" onClick={handleUpgradeAccess} disabled={isUpgradingAccess}>
+                {isUpgradingAccess ? "Waiting for Google..." : "Enable event creation"}
+              </Button>
+            )}
             <Button
               variant="destructive"
               onClick={handleDisconnect}

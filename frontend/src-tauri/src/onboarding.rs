@@ -210,7 +210,7 @@ pub async fn complete_onboarding<R: Runtime>(
         .map_err(|e| format!("Failed to load onboarding status: {}", e))?;
 
     status.completed = true;
-    status.current_step = 4; // Max step (4 on macOS with permissions, 3 on other platforms)
+    status.current_step = 5; // Max step (5 on macOS with permissions, 4 on other platforms)
     status.model_status.parakeet = "downloaded".to_string();
     status.model_status.summary = "downloaded".to_string();
 
@@ -219,5 +219,52 @@ pub async fn complete_onboarding<R: Runtime>(
         .map_err(|e| format!("Failed to save completed onboarding status: {}", e))?;
 
     info!("Onboarding completed successfully with model: {}", model);
+    Ok(())
+}
+
+/// Complete onboarding in hosted (Gemini) mode — no local model downloads needed.
+#[tauri::command]
+pub async fn complete_onboarding_hosted<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    api_key: String,
+) -> Result<(), String> {
+    info!("Completing onboarding in hosted (Gemini) mode");
+
+    let pool = state.db_manager.pool();
+
+    // Save Gemini as the summary provider
+    if let Err(e) =
+        SettingsRepository::save_model_config(pool, "gemini", "gemini-2.5-pro", "large-v3", None)
+            .await
+    {
+        error!("Failed to save gemini model config: {}", e);
+        return Err(format!("Failed to save gemini model config: {}", e));
+    }
+
+    // Save the Gemini API key
+    if let Err(e) = SettingsRepository::save_api_key(pool, "gemini", &api_key).await {
+        error!("Failed to save Gemini API key: {}", e);
+        return Err(format!("Failed to save Gemini API key: {}", e));
+    }
+
+    // Keep default local transcription (parakeet)
+    info!("Saved hosted config: summary=gemini-2.5-pro, transcription=parakeet (local)");
+
+    // Mark onboarding as complete
+    let mut status = load_onboarding_status(&app)
+        .await
+        .map_err(|e| format!("Failed to load onboarding status: {}", e))?;
+
+    status.completed = true;
+    status.current_step = 5;
+    status.model_status.parakeet = "not_needed".to_string();
+    status.model_status.summary = "hosted".to_string();
+
+    save_onboarding_status(&app, &status)
+        .await
+        .map_err(|e| format!("Failed to save completed onboarding status: {}", e))?;
+
+    info!("Onboarding completed successfully in hosted mode");
     Ok(())
 }

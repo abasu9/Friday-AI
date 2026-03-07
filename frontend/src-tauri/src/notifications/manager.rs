@@ -345,6 +345,7 @@ impl<R: Runtime> NotificationManager<R> {
             NotificationType::SystemError(_) => {
                 settings.notification_preferences.show_system_errors
             }
+            NotificationType::AgentRecommendation | NotificationType::AgentCalendarProposal => true,
             NotificationType::Test => true, // Always show test notifications
         }
     }

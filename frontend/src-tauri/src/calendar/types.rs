@@ -13,6 +13,7 @@ pub struct CalendarAccountSummary {
 pub struct CalendarStatusResponse {
     pub client_configured: bool,
     pub connected: bool,
+    pub can_write: bool,
     pub syncing: bool,
     pub account: Option<CalendarAccountSummary>,
 }

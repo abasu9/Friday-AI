@@ -105,7 +105,7 @@ export function TranscriptPanel({
       )}
 
       {/* Upcoming calendar meetings */}
-      {!isRecording && onStartRecordingWithTitle && (
+      {!isRecording && !isProcessingStop && !isStopping && onStartRecordingWithTitle && (
         <div className="flex justify-center px-4 pt-4">
           <div className="w-2/3 max-w-[750px]">
             <UpcomingMeetings

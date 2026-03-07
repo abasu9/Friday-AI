@@ -34,6 +34,7 @@ interface ParakeetProgressInfo {
 
 interface OnboardingContextType {
   currentStep: number;
+  processingMode: 'local' | 'hosted' | null;
   parakeetDownloaded: boolean;
   parakeetProgress: number;
   parakeetProgressInfo: ParakeetProgressInfo;
@@ -51,6 +52,7 @@ interface OnboardingContextType {
   goNext: () => void;
   goPrevious: () => void;
   // Setters
+  setProcessingMode: (mode: 'local' | 'hosted') => void;
   setParakeetDownloaded: (value: boolean) => void;
   setSummaryModelDownloaded: (value: boolean) => void;
   setSelectedSummaryModel: (value: string) => void;
@@ -58,6 +60,7 @@ interface OnboardingContextType {
   setPermissionStatus: (permission: keyof OnboardingPermissions, status: PermissionStatus) => void;
   setPermissionsSkipped: (skipped: boolean) => void;
   completeOnboarding: () => Promise<void>;
+  completeOnboardingHosted: (apiKey: string) => Promise<void>;
   startBackgroundDownloads: (includeGemma: boolean) => Promise<void>;
   retryParakeetDownload: () => Promise<void>;
 }
@@ -67,6 +70,7 @@ const OnboardingContext = createContext<OnboardingContextType | undefined>(undef
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completed, setCompleted] = useState(false);
+  const [processingMode, setProcessingMode] = useState<'local' | 'hosted' | null>(null);
   const [parakeetDownloaded, setParakeetDownloaded] = useState(false);
   const [parakeetProgress, setParakeetProgress] = useState(0);
   const [parakeetProgressInfo, setParakeetProgressInfo] = useState<ParakeetProgressInfo>({
@@ -352,9 +356,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     let currentStep = savedStatus.current_step;
     let completed = savedStatus.completed;
 
-    // Clamp step to new max (4)
-    if (currentStep > 4) {
-      currentStep = 3; // Go to download progress step
+    // Clamp step to new max (5)
+    if (currentStep > 5) {
+      currentStep = 4; // Go to download progress step
     }
 
     // Trust the completed status - don't revert based on model downloads
@@ -418,6 +422,25 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       console.error('[OnboardingContext] Failed to complete onboarding:', error);
       isCompletingRef.current = false; // Reset flag on error
       throw error; // Re-throw so PermissionsStep can handle it
+    }
+  };
+
+  const completeOnboardingHosted = async (apiKey: string) => {
+    try {
+      isCompletingRef.current = true;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = undefined;
+      }
+
+      await invoke('complete_onboarding_hosted', { apiKey });
+      setCompleted(true);
+      console.log('[OnboardingContext] Onboarding completed in hosted (Gemini) mode');
+      isCompletingRef.current = false;
+    } catch (error) {
+      console.error('[OnboardingContext] Failed to complete hosted onboarding:', error);
+      isCompletingRef.current = false;
+      throw error;
     }
   };
 
@@ -485,21 +508,19 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const goToStep = useCallback((step: number) => {
-    setCurrentStep(Math.max(1, Math.min(step, 4)));
+    setCurrentStep(Math.max(1, Math.min(step, 5)));
   }, []);
 
   const goNext = useCallback(() => {
     setCurrentStep((prev: number) => {
       const next = prev + 1;
-      // Don't go past step 4
-      return Math.min(next, 4);
+      return Math.min(next, 5);
     });
   }, []);
 
   const goPrevious = useCallback(() => {
     setCurrentStep((prev: number) => {
       const previous = prev - 1;
-      // Don't go below step 1
       return Math.max(previous, 1);
     });
   }, []);
@@ -508,6 +529,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     <OnboardingContext.Provider
       value={{
         currentStep,
+        processingMode,
         parakeetDownloaded,
         parakeetProgress,
         parakeetProgressInfo,
@@ -522,6 +544,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         goToStep,
         goNext,
         goPrevious,
+        setProcessingMode,
         setParakeetDownloaded,
         setSummaryModelDownloaded,
         setSelectedSummaryModel,
@@ -529,6 +552,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         setPermissionStatus,
         setPermissionsSkipped,
         completeOnboarding,
+        completeOnboardingHosted,
         startBackgroundDownloads,
         retryParakeetDownload,
       }}

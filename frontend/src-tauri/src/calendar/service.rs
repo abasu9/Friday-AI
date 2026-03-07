@@ -1,3 +1,4 @@
+use crate::agent::types::{CalendarEventDraftPayload, CreatedCalendarEventSummary};
 use crate::calendar::types::{
     CalendarAccountSummary, CalendarAttendeeSummary, CalendarLinkCandidate, CalendarStatusResponse,
     CalendarSyncResult, LinkedCalendarEvent, PendingRecordingLink, StoredAttendee,
@@ -29,6 +30,7 @@ use url::Url;
 const GOOGLE_PROVIDER: &str = "google";
 const GOOGLE_ACCOUNT_ID: &str = "google-primary";
 const GOOGLE_SCOPE: &str = "https://www.googleapis.com/auth/calendar.readonly";
+const GOOGLE_WRITE_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
 const TOKEN_KEYRING_SERVICE: &str = "Friday.GoogleCalendar";
 const TOKEN_KEYRING_USERNAME: &str = "google-primary";
 const MISSING_KEYCHAIN_TOKENS_ERROR: &str =
@@ -115,6 +117,64 @@ struct GoogleEventTime {
     time_zone: Option<String>,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct GoogleEventInsertRequest {
+    summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    location: Option<String>,
+    start: GoogleEventInsertDateTime,
+    end: GoogleEventInsertDateTime,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    attendees: Option<Vec<GoogleEventInsertAttendee>>,
+    #[serde(rename = "conferenceData", skip_serializing_if = "Option::is_none")]
+    conference_data: Option<GoogleEventInsertConferenceData>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct GoogleEventInsertDateTime {
+    #[serde(rename = "dateTime")]
+    date_time: String,
+    #[serde(rename = "timeZone", skip_serializing_if = "Option::is_none")]
+    time_zone: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct GoogleEventInsertAttendee {
+    email: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct GoogleEventInsertConferenceData {
+    #[serde(rename = "createRequest")]
+    create_request: GoogleEventConferenceCreateRequest,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct GoogleEventConferenceCreateRequest {
+    #[serde(rename = "requestId")]
+    request_id: String,
+    #[serde(rename = "conferenceSolutionKey")]
+    conference_solution_key: GoogleConferenceSolutionKey,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct GoogleConferenceSolutionKey {
+    #[serde(rename = "type")]
+    kind: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleInsertedEvent {
+    id: String,
+    summary: Option<String>,
+    #[serde(rename = "htmlLink")]
+    html_link: Option<String>,
+    start: GoogleEventTime,
+    end: GoogleEventTime,
+}
+
 #[derive(Debug, Clone)]
 struct EventMatchCandidate {
     event: CalendarEventModel,
@@ -134,6 +194,7 @@ pub async fn get_status<R: Runtime>(app: &AppHandle<R>) -> Result<CalendarStatus
         return Ok(CalendarStatusResponse {
             client_configured,
             connected: false,
+            can_write: false,
             syncing,
             account: None,
         });
@@ -149,6 +210,10 @@ pub async fn get_status<R: Runtime>(app: &AppHandle<R>) -> Result<CalendarStatus
         connected: account
             .as_ref()
             .map(|item| item.connection_status == "connected")
+            .unwrap_or(false),
+        can_write: account
+            .as_ref()
+            .map(account_has_write_scope)
             .unwrap_or(false),
         syncing,
         account: account.map(account_to_summary),
@@ -207,6 +272,7 @@ pub async fn list_upcoming_events<R: Runtime>(
 
 pub async fn connect_google<R: Runtime>(
     app: &AppHandle<R>,
+    write_access: bool,
 ) -> Result<CalendarStatusResponse, String> {
     let client_id = google_client_id()
         .ok_or_else(|| "FRIDAY_GOOGLE_CLIENT_ID is not configured".to_string())?;
@@ -227,7 +293,7 @@ pub async fn connect_google<R: Runtime>(
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     let (auth_url, csrf_state) = oauth_client
         .authorize_url(CsrfToken::new_random)
-        .add_scope(Scope::new(GOOGLE_SCOPE.to_string()))
+        .add_scopes(requested_google_scopes(write_access))
         .set_pkce_challenge(pkce_challenge)
         .add_extra_param("access_type", "offline")
         .add_extra_param("prompt", "consent")
@@ -272,7 +338,8 @@ pub async fn connect_google<R: Runtime>(
         GOOGLE_ACCOUNT_ID,
         GOOGLE_PROVIDER,
         Some(email.as_str()),
-        &serde_json::to_string(&vec![GOOGLE_SCOPE]).unwrap_or_else(|_| "[]".to_string()),
+        &serde_json::to_string(&google_scope_strings(write_access))
+            .unwrap_or_else(|_| "[]".to_string()),
         "connected",
         None,
         None,
@@ -282,6 +349,38 @@ pub async fn connect_google<R: Runtime>(
 
     let _ = sync_google_calendar(app).await?;
     get_status(app).await
+}
+
+pub async fn create_google_calendar_event_from_agent<R: Runtime>(
+    app: &AppHandle<R>,
+    draft: &CalendarEventDraftPayload,
+) -> Result<CreatedCalendarEventSummary, String> {
+    let Some(app_state) = app.try_state::<AppState>() else {
+        return Err("Database is not initialized yet".to_string());
+    };
+    let pool = app_state.db_manager.pool();
+    let Some(account) = CalendarRepository::get_google_account(pool)
+        .await
+        .map_err(|e| format!("Failed to load Google Calendar account: {}", e))?
+    else {
+        return Err("Google Calendar is not connected".to_string());
+    };
+
+    if account.connection_status != "connected" {
+        return Err("Google Calendar is not connected".to_string());
+    }
+    if !account_has_write_scope(&account) {
+        return Err(
+            "Reconnect Google Calendar with write access before creating events".to_string(),
+        );
+    }
+
+    let access_token = ensure_access_token(&account).await?;
+    let created = insert_google_calendar_event(&access_token, draft).await?;
+    if let Err(err) = sync_google_calendar(app).await {
+        log::warn!("Google Calendar sync after event creation failed: {}", err);
+    }
+    Ok(created)
 }
 
 pub async fn disconnect_google<R: Runtime>(
@@ -319,6 +418,10 @@ pub async fn sync_google_calendar<R: Runtime>(
 
     if let Err(err) = set_sync_in_progress(app, false).await {
         log::warn!("Failed to clear calendar sync state: {}", err);
+    }
+
+    if result.is_ok() {
+        crate::agent::service::trigger_calendar_sync(app.clone());
     }
 
     result
@@ -609,6 +712,21 @@ fn google_client_secret() -> Option<String> {
         .or_else(|| std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET").ok())
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+}
+
+fn requested_google_scopes(write_access: bool) -> Vec<Scope> {
+    google_scope_strings(write_access)
+        .into_iter()
+        .map(Scope::new)
+        .collect()
+}
+
+fn google_scope_strings(write_access: bool) -> Vec<String> {
+    let mut scopes = vec![GOOGLE_SCOPE.to_string()];
+    if write_access {
+        scopes.push(GOOGLE_WRITE_SCOPE.to_string());
+    }
+    scopes
 }
 
 fn build_oauth_client(
@@ -1009,6 +1127,84 @@ async fn fetch_events(
     Ok(events)
 }
 
+async fn insert_google_calendar_event(
+    access_token: &str,
+    draft: &CalendarEventDraftPayload,
+) -> Result<CreatedCalendarEventSummary, String> {
+    let request = GoogleEventInsertRequest {
+        summary: draft.title.clone(),
+        description: draft.description.clone(),
+        location: draft.location.clone(),
+        start: GoogleEventInsertDateTime {
+            date_time: draft.start_at.clone(),
+            time_zone: draft.timezone.clone(),
+        },
+        end: GoogleEventInsertDateTime {
+            date_time: draft.end_at.clone(),
+            time_zone: draft.timezone.clone(),
+        },
+        attendees: (!draft.attendees.is_empty()).then(|| {
+            draft
+                .attendees
+                .iter()
+                .cloned()
+                .map(|email| GoogleEventInsertAttendee { email })
+                .collect::<Vec<_>>()
+        }),
+        conference_data: draft
+            .conference_request
+            .then(|| GoogleEventInsertConferenceData {
+                create_request: GoogleEventConferenceCreateRequest {
+                    request_id: format!("friday-{}", uuid::Uuid::new_v4()),
+                    conference_solution_key: GoogleConferenceSolutionKey {
+                        kind: "hangoutsMeet".to_string(),
+                    },
+                },
+            }),
+    };
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://www.googleapis.com/calendar/v3/calendars/primary/events")
+        .bearer_auth(access_token)
+        .query(&[(
+            "conferenceDataVersion",
+            if draft.conference_request { "1" } else { "0" },
+        )])
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to create Google Calendar event: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "<failed to read response body>".to_string());
+        return Err(format!(
+            "Failed to create Google Calendar event: HTTP {}: {}",
+            status, body
+        ));
+    }
+
+    let created = response.json::<GoogleInsertedEvent>().await.map_err(|e| {
+        format!(
+            "Failed to parse Google Calendar event creation response: {}",
+            e
+        )
+    })?;
+
+    Ok(CreatedCalendarEventSummary {
+        provider_event_id: created.id,
+        title: created.summary.unwrap_or_else(|| draft.title.clone()),
+        start_at: normalize_google_event_time(&created.start)
+            .unwrap_or_else(|| draft.start_at.clone()),
+        end_at: normalize_google_event_time(&created.end).unwrap_or_else(|| draft.end_at.clone()),
+        html_link: created.html_link,
+    })
+}
+
 fn normalize_google_event_time(event_time: &GoogleEventTime) -> Option<String> {
     if let Some(date_time) = event_time.date_time.as_deref() {
         return parse_rfc3339(date_time).map(|value| value.to_rfc3339());
@@ -1147,6 +1343,13 @@ fn account_to_summary(account: ConnectedAccountModel) -> CalendarAccountSummary 
         last_error: account.last_error,
         scopes: serde_json::from_str::<Vec<String>>(&account.scopes_json).unwrap_or_default(),
     }
+}
+
+fn account_has_write_scope(account: &ConnectedAccountModel) -> bool {
+    serde_json::from_str::<Vec<String>>(&account.scopes_json)
+        .unwrap_or_default()
+        .into_iter()
+        .any(|scope| scope == GOOGLE_WRITE_SCOPE)
 }
 
 fn row_to_linked_event(row: MeetingLinkedEventRow) -> LinkedCalendarEvent {

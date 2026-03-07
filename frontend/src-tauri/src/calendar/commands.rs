@@ -22,8 +22,16 @@ pub async fn calendar_list_upcoming<R: Runtime>(
 #[tauri::command]
 pub async fn calendar_connect_google<R: Runtime>(
     app: AppHandle<R>,
+    write_access: Option<bool>,
 ) -> Result<CalendarStatusResponse, String> {
-    service::connect_google(&app).await
+    service::connect_google(&app, write_access.unwrap_or(false)).await
+}
+
+#[tauri::command]
+pub async fn calendar_upgrade_google_access<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<CalendarStatusResponse, String> {
+    service::connect_google(&app, true).await
 }
 
 #[tauri::command]

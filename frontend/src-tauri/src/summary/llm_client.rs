@@ -73,6 +73,7 @@ pub enum LLMProvider {
     OpenRouter,
     BuiltInAI,
     CustomOpenAI,
+    Gemini,
 }
 
 impl LLMProvider {
@@ -86,6 +87,7 @@ impl LLMProvider {
             "openrouter" => Ok(Self::OpenRouter),
             "builtin-ai" | "local-llama" | "localllama" => Ok(Self::BuiltInAI),
             "custom-openai" => Ok(Self::CustomOpenAI),
+            "gemini" => Ok(Self::Gemini),
             _ => Err(format!("Unsupported LLM provider: {}", s)),
         }
     }
@@ -201,6 +203,10 @@ pub async fn generate_summary(
             // This case is handled earlier with early returns
             unreachable!("BuiltInAI is handled before this match statement")
         }
+        LLMProvider::Gemini => (
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions".to_string(),
+            header::HeaderMap::new(),
+        ),
     };
 
     // Add authorization header for non-Claude providers
@@ -350,5 +356,6 @@ fn provider_name(provider: &LLMProvider) -> &str {
         LLMProvider::BuiltInAI => "Built-in AI",
         LLMProvider::OpenRouter => "OpenRouter",
         LLMProvider::CustomOpenAI => "Custom OpenAI",
+        LLMProvider::Gemini => "Gemini",
     }
 }

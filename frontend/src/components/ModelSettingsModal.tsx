@@ -31,7 +31,7 @@ import { cn, isOllamaNotInstalledError } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export interface ModelConfig {
-  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai';
+  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai' | 'gemini';
   model: string;
   whisperModel: string;
   apiKey?: string | null;
@@ -229,13 +229,15 @@ export function ModelSettingsModal({
     openrouter: openRouterModels.map((m) => m.id),
     'builtin-ai': builtinAiModels.map((m) => m.name),
     'custom-openai': customOpenAIModel ? [customOpenAIModel] : [], // User specifies model manually
+    gemini: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.1-pro'],
   };
 
   const requiresApiKey =
     modelConfig.provider === 'claude' ||
     modelConfig.provider === 'groq' ||
     modelConfig.provider === 'openai' ||
-    modelConfig.provider === 'openrouter';
+    modelConfig.provider === 'openrouter' ||
+    modelConfig.provider === 'gemini';
 
   // Check if Ollama endpoint has changed but models haven't been fetched yet
   const ollamaEndpointChanged = modelConfig.provider === 'ollama' &&
@@ -875,6 +877,7 @@ export function ModelSettingsModal({
                 <SelectItem value="builtin-ai">Built-in AI (Offline, No API needed)</SelectItem>
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="custom-openai">Custom Server (OpenAI)</SelectItem>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>
                 <SelectItem value="ollama">Ollama</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
@@ -882,7 +885,7 @@ export function ModelSettingsModal({
               </SelectContent>
             </Select>
 
-            {modelConfig.provider !== 'builtin-ai' && modelConfig.provider !== 'custom-openai' && (
+            {modelConfig.provider !== 'builtin-ai' && modelConfig.provider !== 'custom-openai' && modelConfig.provider !== 'gemini' && (
               <Popover open={modelComboboxOpen} onOpenChange={setModelComboboxOpen} modal={true}>
                 <PopoverTrigger asChild>
                   <Button
@@ -1353,6 +1356,45 @@ export function ModelSettingsModal({
                 )}
               </ScrollArea>
             )}
+          </div>
+        )}
+
+        {/* Gemini Models Section */}
+        {modelConfig.provider === 'gemini' && (
+          <div className="mt-4">
+            <Label className="block text-sm font-medium text-gray-700 mb-2">Select Model</Label>
+            <div className="grid gap-3">
+              {modelOptions['gemini'].map((model) => {
+                const isSelected = modelConfig.model === model;
+                const info: Record<string, { icon: string; tagline: string }> = {
+                  'gemini-2.5-pro': { icon: '🧠', tagline: 'Best quality — recommended for summaries' },
+                  'gemini-2.5-flash': { icon: '⚡', tagline: 'Fast & cost-effective' },
+                  'gemini-2.0-flash': { icon: '💨', tagline: 'Previous generation — lightweight' },
+                  'gemini-3.1-pro': { icon: '🚀', tagline: 'Latest — requires paid billing plan' },
+                };
+                const { icon, tagline } = info[model] || { icon: '☁️', tagline: '' };
+                return (
+                  <div
+                    key={model}
+                    className={`relative rounded-lg border-2 p-4 cursor-pointer transition-all ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                    onClick={() => setModelConfig((prev: ModelConfig) => ({ ...prev, model }))}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-2xl">{icon}</span>
+                      <h3 className="font-semibold text-gray-900">{model}</h3>
+                      {isSelected && (
+                        <span className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-medium">✓</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 ml-9">{tagline}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

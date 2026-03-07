@@ -1003,6 +1003,7 @@ pub async fn api_save_transcript<R: Runtime>(
                     err
                 );
             }
+            crate::agent::service::trigger_meeting_saved(app.clone(), meeting_id.clone());
             log_info!(
                 "Successfully saved transcript and created meeting with id: {}",
                 meeting_id

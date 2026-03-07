@@ -209,3 +209,57 @@ impl DatabaseManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DatabaseManager;
+    use sqlx::Row;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn migrations_preserve_expected_settings_columns() {
+        let dir = tempdir().expect("temp dir");
+        let db_path = dir.path().join("migration-smoke-test.sqlite");
+        let db_path = db_path.to_string_lossy().to_string();
+
+        let manager = DatabaseManager::new(&db_path, "")
+            .await
+            .expect("database manager");
+        let rows = sqlx::query("PRAGMA table_info(settings)")
+            .fetch_all(manager.pool())
+            .await
+            .expect("settings table info");
+
+        let columns: Vec<String> = rows
+            .into_iter()
+            .map(|row| row.get::<String, _>("name"))
+            .collect();
+
+        assert_eq!(
+            columns,
+            vec![
+                "id",
+                "provider",
+                "model",
+                "whisperModel",
+                "groqApiKey",
+                "openaiApiKey",
+                "anthropicApiKey",
+                "ollamaApiKey",
+                "openRouterApiKey",
+                "ollamaEndpoint",
+                "customOpenAIConfig",
+                "geminiApiKey",
+            ]
+        );
+
+        let agent_settings_exists: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'agent_settings'",
+        )
+        .fetch_one(manager.pool())
+        .await
+        .expect("agent_settings table exists");
+
+        assert_eq!(agent_settings_exists, 1);
+    }
+}

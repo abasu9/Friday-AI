@@ -185,3 +185,85 @@ pub struct CalendarSyncStateModel {
     pub last_success_at: Option<String>,
     pub last_error: Option<String>,
 }
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentSettingModel {
+    pub id: String,
+    pub enabled: i64,
+    pub provider: String,
+    pub model: String,
+    pub notifications_enabled: i64,
+    pub calendar_proposals_enabled: i64,
+    pub heartbeat_interval_minutes: i64,
+    pub last_run_at: Option<String>,
+    pub last_success_at: Option<String>,
+    pub last_error: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentRunModel {
+    pub id: String,
+    pub trigger_type: String,
+    pub trigger_ref: Option<String>,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub model_provider: String,
+    pub model_name: String,
+    pub summary_json: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentMemoryItemModel {
+    pub id: String,
+    pub memory_type: String,
+    pub title: String,
+    pub body: String,
+    pub source_meeting_id: Option<String>,
+    pub source_calendar_event_id: Option<String>,
+    pub subject_key: String,
+    pub subject_json: Option<String>,
+    pub confidence: f64,
+    pub status: String,
+    pub first_seen_at: String,
+    pub last_seen_at: String,
+    pub created_run_id: Option<String>,
+    pub updated_run_id: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentTaskModel {
+    pub id: String,
+    pub title: String,
+    pub body: String,
+    pub source_meeting_id: Option<String>,
+    pub source_memory_item_id: Option<String>,
+    pub owner_kind: String,
+    pub due_at: Option<String>,
+    pub priority: String,
+    pub status: String,
+    pub last_suggested_at: String,
+    pub created_run_id: Option<String>,
+    pub updated_run_id: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentRecommendationModel {
+    pub id: String,
+    pub recommendation_type: String,
+    pub title: String,
+    pub body: String,
+    pub rationale: String,
+    pub confidence: f64,
+    pub source_meeting_id: Option<String>,
+    pub source_calendar_event_id: Option<String>,
+    pub task_id: Option<String>,
+    pub payload_json: Option<String>,
+    pub status: String,
+    pub surfaced_at: String,
+    pub acted_at: Option<String>,
+    pub error: Option<String>,
+}

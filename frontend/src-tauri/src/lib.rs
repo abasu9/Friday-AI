@@ -31,6 +31,7 @@ macro_rules! perf_trace {
 // Re-export async logging macros for external use (removed due to macro conflicts)
 
 // Declare audio module
+pub mod agent;
 pub mod analytics;
 pub mod anthropic;
 pub mod api;
@@ -418,6 +419,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .manage(agent::service::AgentManagerState::default())
         .manage(calendar::service::CalendarManagerState::default())
         .manage(whisper_engine::parallel_commands::ParallelProcessorState::new())
         .manage(Arc::new(RwLock::new(
@@ -518,6 +520,7 @@ pub fn run() {
             .expect("Failed to initialize database");
 
             calendar::service::start_background_sync_loop(_app.handle().clone());
+            agent::service::start_heartbeat_loop(_app.handle().clone());
 
             // Initialize bundled templates directory for dynamic template discovery
             log::info!("Initializing bundled templates directory...");
@@ -667,12 +670,26 @@ pub fn run() {
             calendar::commands::calendar_get_status,
             calendar::commands::calendar_list_upcoming,
             calendar::commands::calendar_connect_google,
+            calendar::commands::calendar_upgrade_google_access,
             calendar::commands::calendar_disconnect_google,
             calendar::commands::calendar_sync_now,
             calendar::commands::calendar_get_meeting_link,
             calendar::commands::calendar_get_link_candidates,
             calendar::commands::calendar_set_meeting_link,
             calendar::commands::calendar_clear_meeting_link,
+            agent::commands::agent_get_status,
+            agent::commands::agent_get_settings,
+            agent::commands::agent_set_settings,
+            agent::commands::agent_save_gemini_api_key,
+            agent::commands::agent_clear_gemini_api_key,
+            agent::commands::agent_run_heartbeat_now,
+            agent::commands::agent_list_recommendations,
+            agent::commands::agent_accept_recommendation,
+            agent::commands::agent_dismiss_recommendation,
+            agent::commands::agent_list_memory,
+            agent::commands::agent_get_meeting_context,
+            agent::commands::agent_list_tasks,
+            agent::commands::agent_update_task_status,
             // Custom OpenAI commands
             api::api_save_custom_openai_config,
             api::api_get_custom_openai_config,
@@ -750,6 +767,7 @@ pub fn run() {
             onboarding::save_onboarding_status_cmd,
             onboarding::reset_onboarding_status_cmd,
             onboarding::complete_onboarding,
+            onboarding::complete_onboarding_hosted,
             // System settings commands
             #[cfg(target_os = "macos")]
             utils::open_system_settings,

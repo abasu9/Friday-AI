@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import {
   WelcomeStep,
+  ModeSelectionStep,
   PermissionsStep,
   DownloadProgressStep,
   SetupOverviewStep,
@@ -12,7 +13,7 @@ interface OnboardingFlowProps {
 }
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
-  const { currentStep } = useOnboarding();
+  const { currentStep, processingMode } = useOnboarding();
   const [isMac, setIsMac] = React.useState(false);
 
   useEffect(() => {
@@ -31,18 +32,21 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     checkPlatform();
   }, []);
 
-  // 4-Step Onboarding Flow (System-Recommended Models):
-  // Step 1: Welcome - Introduce Friday features
-  // Step 2: Setup Overview - Database initialization + show recommended downloads
-  // Step 3: Download Progress - Download Parakeet + Gemma (auto-selected based on RAM)
-  // Step 4: Permissions - Request mic + system audio (macOS only)
+  // 5-Step Onboarding Flow:
+  // Step 1: Welcome
+  // Step 2: Mode Selection (Local vs Hosted/Gemini)
+  // Step 3: Setup Overview (local only)
+  // Step 4: Download Progress (local only)
+  // Step 5: Permissions (macOS only, local mode)
+  // Hosted mode completes at Step 2 (skips 3-5)
 
   return (
     <div className="onboarding-flow">
       {currentStep === 1 && <WelcomeStep />}
-      {currentStep === 2 && <SetupOverviewStep />}
-      {currentStep === 3 && <DownloadProgressStep />}
-      {currentStep === 4 && isMac && <PermissionsStep />}
+      {currentStep === 2 && <ModeSelectionStep />}
+      {currentStep === 3 && processingMode === 'local' && <SetupOverviewStep />}
+      {currentStep === 4 && processingMode === 'local' && <DownloadProgressStep />}
+      {currentStep === 5 && isMac && processingMode === 'local' && <PermissionsStep />}
     </div>
   );
 }

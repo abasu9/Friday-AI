@@ -22,6 +22,8 @@ pub enum NotificationType {
     TranscriptionComplete,
     MeetingReminder(u64), // Duration in minutes
     SystemError(String),
+    AgentRecommendation,
+    AgentCalendarProposal,
     Test, // For testing notifications
 }
 
@@ -206,5 +208,17 @@ impl Notification {
         )
         .with_priority(NotificationPriority::Normal)
         .with_timeout(NotificationTimeout::Seconds(5))
+    }
+
+    pub fn agent_recommendation(title: impl Into<String>, body: impl Into<String>) -> Self {
+        Notification::new(title, body, NotificationType::AgentRecommendation)
+            .with_priority(NotificationPriority::Normal)
+            .with_timeout(NotificationTimeout::Seconds(6))
+    }
+
+    pub fn agent_calendar_proposal(title: impl Into<String>, body: impl Into<String>) -> Self {
+        Notification::new(title, body, NotificationType::AgentCalendarProposal)
+            .with_priority(NotificationPriority::High)
+            .with_timeout(NotificationTimeout::Seconds(8))
     }
 }
