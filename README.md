@@ -1,14 +1,12 @@
-# Friday
-
-<div align="center">
-  <img src="docs/FRIDAY_logo.jpg" width="650" alt="Friday logo" />
-  <h1>Friday</h1>
+<h1>Friday</h1>
   <p>
-    Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries
+    Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries. Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface.
   </p>
 </div>
+<div align="center">
+  <img src="docs/FRIDAY_logo.jpg" width="1250" alt="Friday logo" />
+</div>
 
-Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface.
 
 <div align="center">
   <img src="docs/friday_demo.gif" width="650" alt="Friday demo" />
@@ -80,7 +78,7 @@ Frontend HTTP/WebSocket   <->  FastAPI backend  <->  SQLite + LLM providers
 ## Requirements
 
 - Rust (stable toolchain)
-- Node.js 20+ and `pnpm`
+- Node.js 20+ and pnpm
 - Python 3.8+ (for backend workflows)
 - On macOS: microphone + screen recording permission for full system-audio capture
 - GPU support depends on platform:
@@ -136,7 +134,7 @@ If you only need to test frontend rendering, you can run `pnpm run dev` from `fr
   - Whisper model options: `tiny`, `base`, `small`, `medium`, `large-v3` and more
 
 ## Repository links
-
+- Website documentation: `tinyurl.com/2nvsk8ek`
 - Architecture details: `docs/architecture.md`
 - Build details: `docs/BUILDING.md`
 - Linux build notes: `docs/building_in_linux.md`

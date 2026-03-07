@@ -19,7 +19,7 @@ backend/
 │   │   ├── state.py          # FridayState definition
 │   │   ├── prompts.py        # All prompt layers
 │   │   └── tools/
-│   │       ├── google.py     # MCP Google Workspace tools
+│   │       ├── gws.py        # Google Workspace CLI wrapper tools
 │   │       ├── supabase.py   # Custom Supabase tools
 │   │       └── registry.py   # Tool-intent mapping
 │   ├── models/
@@ -31,7 +31,7 @@ backend/
 │   │   ├── heartbeat.py      # Background heartbeat loop
 │   │   └── checkpointer.py   # LangGraph Supabase checkpointer
 │   └── core/
-│       ├── auth.py           # Supabase Auth JWT validation
+│       ├── gws_runner.py     # gws CLI subprocess runner
 │       └── sse.py            # SSE streaming utilities
 ├── pyproject.toml
 └── .env
@@ -324,57 +324,56 @@ app.add_middleware(
 )
 ```
 
-## Authentication (Supabase Auth)
+## Authentication (gws CLI)
 
-Authentication is handled via **Supabase Auth with Google as the OAuth provider**.
+Authentication is handled via the **Google Workspace CLI** (`gws`). The user authenticates once via `gws auth login` on the machine running the backend. This is a direct Google OAuth flow — no third-party auth layer needed.
 
-### Client-Side (Desktop App)
-```typescript
-// Frontend initiates Google sign-in via Supabase JS SDK
-const { data, error } = await supabase.auth.signInWithOAuth({
-  provider: 'google',
-  options: {
-    scopes: 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/documents.readonly https://www.googleapis.com/auth/drive.readonly',
-    redirectTo: 'http://localhost:3118/auth/callback',
-  },
-});
+### Setup (one-time)
+```bash
+# Install the gws CLI
+npm install -g @googleworkspace/cli
+
+# Authenticate with Google (opens browser for OAuth consent)
+gws auth setup     # creates GCP project + OAuth client
+gws auth login     # authenticates with Google account
 ```
 
 ### Server-Side (FastAPI)
 ```python
-from supabase import create_client
+import subprocess
+import json
 
-async def get_current_user(authorization: str = Header(...)) -> dict:
-    """Validate Supabase Auth JWT and return user profile."""
-    token = authorization.replace("Bearer ", "")
-    supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+async def run_gws(command: str, dry_run: bool = False) -> dict:
+    """Execute a gws CLI command and return parsed JSON output."""
+    cmd = ["gws"] + command.split()
+    if dry_run:
+        cmd.append("--dry-run")
 
-    # Verify JWT and get user
-    user_response = supabase.auth.get_user(token)
-    user = user_response.user
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
-    # Get Google provider token for Composio/Google API calls
-    session = supabase.auth.get_session()
-    google_token = session.provider_token if session else None
+    if result.returncode != 0:
+        return {"error": result.stderr.strip(), "success": False}
 
-    return {
-        "id": user.id,
-        "email": user.email,
-        "google_token": google_token,
-    }
+    try:
+        return {"data": json.loads(result.stdout), "success": True}
+    except json.JSONDecodeError:
+        return {"data": result.stdout.strip(), "success": True}
 ```
 
-### `GET /auth/session` — Current user session
+### `GET /auth/status` — Check gws authentication status
 
 ```python
-@router.get("/auth/session")
-async def get_auth_session(user=Depends(get_current_user)):
-    """Return current user session and Google token availability."""
-    return {
-        "user_id": user["id"],
-        "email": user["email"],
-        "google_connected": user["google_token"] is not None,
-    }
+@router.get("/auth/status")
+async def get_auth_status():
+    """Check if gws CLI is authenticated."""
+    result = subprocess.run(
+        ["gws", "gmail", "users", "getProfile", "--params", '{"userId": "me"}', "--fields", "emailAddress"],
+        capture_output=True, text=True, timeout=10
+    )
+    if result.returncode == 0:
+        data = json.loads(result.stdout)
+        return {"authenticated": True, "email": data.get("emailAddress")}
+    return {"authenticated": False, "error": "Run 'gws auth login' to authenticate"}
 ```
 
-> **Note**: Google OAuth client ID/secret are configured in the Supabase Dashboard, not in backend env vars. The backend only needs `SUPABASE_URL` and `SUPABASE_ANON_KEY` to validate JWTs.
+> **Note**: Google OAuth credentials are managed by `gws` (stored encrypted in `~/.config/gws/`). The backend only needs `gws` on PATH — no API keys or secrets in env vars for Google access.

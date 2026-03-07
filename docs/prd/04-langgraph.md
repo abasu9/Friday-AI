@@ -114,7 +114,7 @@ friday_graph = graph.compile(
             │         │          │
             │         ▼          │
             │  ┌──────────────┐  │
-            │  │execute_tools │◄─┘  Call MCP/Supabase tools
+            │  │execute_tools │◄─┘  Call gws CLI / Supabase tools
             │  └──────┬───────┘
             │         │
             ▼         ▼
