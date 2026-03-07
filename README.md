@@ -2,7 +2,9 @@
 <p>
     Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries. Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface. 
   
-  Website Link: [tinyurl.com/2nvsk8ek](https://tinyurl.com/2nvsk8ek)
+  Website Link : [tinyurl.com/2nvsk8ek](https://tinyurl.com/2nvsk8ek)
+  
+  Demo Link : [youtu.be/QXsBkFJ8ack](https://youtu.be/QXsBkFJ8ack)
 
   </p>
 </div>
