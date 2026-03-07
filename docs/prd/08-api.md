@@ -31,7 +31,7 @@ backend/
 │   │   ├── heartbeat.py      # Background heartbeat loop
 │   │   └── checkpointer.py   # LangGraph Supabase checkpointer
 │   └── core/
-│       ├── auth.py           # JWT/API key auth
+│       ├── auth.py           # Supabase Auth JWT validation
 │       └── sse.py            # SSE streaming utilities
 ├── pyproject.toml
 └── .env
@@ -323,3 +323,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 ```
+
+## Authentication (Supabase Auth)
+
+Authentication is handled via **Supabase Auth with Google as the OAuth provider**.
+
+### Client-Side (Desktop App)
+```typescript
+// Frontend initiates Google sign-in via Supabase JS SDK
+const { data, error } = await supabase.auth.signInWithOAuth({
+  provider: 'google',
+  options: {
+    scopes: 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/documents.readonly https://www.googleapis.com/auth/drive.readonly',
+    redirectTo: 'http://localhost:3118/auth/callback',
+  },
+});
+```
+
+### Server-Side (FastAPI)
+```python
+from supabase import create_client
+
+async def get_current_user(authorization: str = Header(...)) -> dict:
+    """Validate Supabase Auth JWT and return user profile."""
+    token = authorization.replace("Bearer ", "")
+    supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+    # Verify JWT and get user
+    user_response = supabase.auth.get_user(token)
+    user = user_response.user
+
+    # Get Google provider token for Composio/Google API calls
+    session = supabase.auth.get_session()
+    google_token = session.provider_token if session else None
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "google_token": google_token,
+    }
+```
+
+### `GET /auth/session` — Current user session
+
+```python
+@router.get("/auth/session")
+async def get_auth_session(user=Depends(get_current_user)):
+    """Return current user session and Google token availability."""
+    return {
+        "user_id": user["id"],
+        "email": user["email"],
+        "google_connected": user["google_token"] is not None,
+    }
+```
+
+> **Note**: Google OAuth client ID/secret are configured in the Supabase Dashboard, not in backend env vars. The backend only needs `SUPABASE_URL` and `SUPABASE_ANON_KEY` to validate JWTs.

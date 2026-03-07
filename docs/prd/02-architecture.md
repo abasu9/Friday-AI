@@ -7,7 +7,7 @@
 │                    Desktop App (Frontend)                │
 │              (owned by teammate — not our scope)         │
 └──────────────────────┬──────────────────────────────────┘
-                       │ HTTP/SSE
+                       │ HTTP/SSE (Supabase Auth — Google OAuth)
                        ▼
 ┌─────────────────────────────────────────────────────────┐
 │                  FastAPI Backend (our scope)             │
@@ -36,8 +36,8 @@
 │  │                 Agent Tools                       │   │
 │  │                                                   │   │
 │  │  ┌─────────────┐  ┌───────────────────────────┐  │   │
-│  │  │ MCP Google  │  │ Custom Supabase Tools     │  │   │
-│  │  │ Workspace   │  │ (tasks, context, prefs)   │  │   │
+│  │  │ Composio    │  │ Custom Supabase Tools     │  │   │
+│  │  │ Google Tools│  │ (tasks, context, prefs)   │  │   │
 │  │  │ gmail,cal,  │  │                           │  │   │
 │  │  │ docs,drive  │  │                           │  │   │
 │  │  └─────────────┘  └───────────────────────────┘  │   │
@@ -53,6 +53,12 @@
 │  │ tasks      │ │ tool_calls   │ │ checkpoints       │  │
 │  │ user_prefs │ │ approvals    │ │ heartbeat_state   │  │
 │  └────────────┘ └──────────────┘ └───────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    Supermemory (RAG)                     │
+│                                                          │
+│  Semantic memory: patterns, entities, commitments,       │
+│  session summaries, learned behaviors                    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -102,6 +108,19 @@ Agent wants to send email:
 | NOT create_react_agent | — | Too opaque; can't inject preprocessing, can't pause for approval |
 | Database | Supabase Postgres | Unified state + checkpointing; real-time subscriptions for heartbeat |
 | Streaming | SSE (not WebSocket) | Simpler, sufficient for our use case, matches InfoSavvy pattern |
-| Tools | MCP protocol | Standard interface for Google Workspace; extensible |
-| LLM | Claude (Anthropic) | Best at following complex instructions; structured output support |
+| Google Tools | Composio | Pre-built LangGraph-compatible Google Workspace tools; handles per-user OAuth |
+| Memory/RAG | Supermemory | Persistent semantic memory for patterns, entities, commitments |
+| Auth | Supabase Auth (Google provider) | Handles Google OAuth, JWT, RLS integration; single sign-in with all scopes |
+| LLM | Gemini (Google DeepMind) | Native Google ecosystem integration; structured JSON output; gemini-3.0-flash for speed, gemini-3.0-pro for complex reasoning |
 | Validation | Pydantic v2 | Type safety, serialization, schema generation for structured output |
+
+### Existing Prior Art
+
+The codebase already includes a working Gemini integration:
+- `backend/app/gemini_processor.py` — `FridayExtractor` class using `gemini-2.0-flash` via `google-genai` SDK
+- `backend/app/main.py` — `/friday-extract` endpoint for structured meeting extraction
+- `docs/google-calendar-heartbeat-plan.md` — Detailed plan for calendar sync and heartbeat architecture
+
+**Dual SDK approach:**
+- `langchain-google-genai` — for LangGraph agent (tool calling, structured output, streaming)
+- `google-genai` — for direct Gemini API calls (meeting extraction, fast processing)

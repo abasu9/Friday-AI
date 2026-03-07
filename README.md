@@ -49,8 +49,8 @@ Friday is meant for teams and professionals who need accurate meeting notes whil
   See transcriptions as they are produced and generate meeting summaries after meetings end.
 - **Cross-platform desktop app**  
   Built with Tauri for macOS, Windows, and Linux targets.
-- **Flexible AI provider support**  
-  Supports local and external providers for summary generation.
+- **Flexible AI provider support**
+  Gemini (primary), with support for local and external providers for summary generation.
 - **Privacy-first defaults**  
   No raw audio/notes upload required for core operation.
 
