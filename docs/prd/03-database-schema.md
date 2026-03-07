@@ -9,6 +9,7 @@ Single Supabase project handles:
 - Task tracking
 - Heartbeat state
 - Human-in-the-loop approvals
+- Supermemory integration
 
 ## Types & Enums
 
@@ -39,27 +40,28 @@ CREATE TYPE tool_call_status AS ENUM ('running', 'completed', 'error');
 
 ## Tables
 
-### `users`
+### `profiles`
 ```sql
-CREATE TABLE users (
+CREATE TABLE profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE NOT NULL,
+  email TEXT,
   display_name TEXT,
-  google_refresh_token TEXT,         -- Encrypted; for MCP Google Workspace
   preferences JSONB DEFAULT '{}',    -- UI prefs, notification settings
   timezone TEXT DEFAULT 'UTC',
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_profiles_email ON profiles(email);
 ```
+
+> **Note**: Google OAuth is handled by `gws auth` directly (not Supabase Auth). The `profiles` table stores user preferences for FRIDAY's agent, not auth state.
 
 ### `sessions`
 ```sql
 CREATE TABLE sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   title TEXT,                         -- Auto-generated from first message
   is_active BOOLEAN DEFAULT true,
   metadata JSONB DEFAULT '{}',        -- Session-level context
@@ -131,7 +133,7 @@ CREATE INDEX idx_approvals_session_pending ON approvals(session_id, status)
 ```sql
 CREATE TABLE tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   session_id UUID REFERENCES sessions(id),   -- Which session created it
   title TEXT NOT NULL,
   description TEXT,
@@ -154,7 +156,7 @@ CREATE INDEX idx_tasks_user_priority ON tasks(user_id, priority, due_at);
 -- Stores agent's learned context about the user (patterns, preferences, relationships)
 CREATE TABLE user_context (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   context_key TEXT NOT NULL,          -- e.g. 'email_patterns', 'meeting_prep_style'
   context_value JSONB NOT NULL,
   confidence FLOAT DEFAULT 0.5,       -- How confident the agent is in this context
@@ -188,7 +190,7 @@ CREATE INDEX idx_checkpoints_session ON checkpoints(session_id);
 ```sql
 CREATE TABLE heartbeat_state (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   last_calendar_check TIMESTAMPTZ,
   last_email_check TIMESTAMPTZ,
   last_task_check TIMESTAMPTZ,
@@ -204,32 +206,38 @@ CREATE TABLE heartbeat_state (
 );
 ```
 
+## Supermemory Integration
+
+Semantic memory lives in **Supermemory** (external RAG service), not in Supabase. The division:
+
+| Data | Storage | Why |
+|------|---------|-----|
+| Sessions, messages, tasks, approvals | Supabase | Operational CRUD, fast lookups, RLS |
+| LangGraph checkpoints | Supabase | State persistence for graph resumption |
+| Heartbeat state | Supabase | Background loop coordination |
+| User preferences (timezone, UI) | Supabase (`profiles`) | Simple key-value, fast access |
+| Session summaries, meeting patterns | Supermemory | Semantic search across conversations |
+| Learned communication styles | Supermemory | Pattern matching, similarity search |
+| Commitments & entity memory | Supermemory | Cross-session context retrieval |
+
+The `user_context` table remains for fast operational lookups. Supermemory handles deeper semantic memory that benefits from vector similarity search.
+
 ## Row-Level Security (RLS)
 
 ```sql
--- Enable RLS on all tables
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tool_calls ENABLE ROW LEVEL SECURITY;
-ALTER TABLE approvals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_context ENABLE ROW LEVEL SECURITY;
-ALTER TABLE checkpoints ENABLE ROW LEVEL SECURITY;
-ALTER TABLE heartbeat_state ENABLE ROW LEVEL SECURITY;
+-- RLS is optional for single-user hackathon demo
+-- Enable if deploying for multiple users
 
--- Policy: users can only access their own data
--- (Backend uses service key for agent operations, RLS protects direct access)
-CREATE POLICY "Users own data" ON users
-  FOR ALL USING (auth.uid() = id);
+-- ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE tool_calls ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE approvals ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE user_context ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE checkpoints ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE heartbeat_state ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users own sessions" ON sessions
-  FOR ALL USING (user_id = auth.uid());
-
-CREATE POLICY "Users own messages" ON messages
-  FOR ALL USING (
-    session_id IN (SELECT id FROM sessions WHERE user_id = auth.uid())
-  );
-
--- Similar policies for all other tables...
+-- Backend uses Supabase service key for all operations.
+-- For multi-user: add RLS policies based on user_id column.
 ```

@@ -39,7 +39,6 @@ CREATE INDEX IF NOT EXISTS idx_transcripts_timestamp ON transcripts(timestamp DE
 -- =============================================================================
 -- SUMMARY PROCESSES TABLE
 -- =============================================================================
-CREATE TYPE IF NOT EXISTS summary_status AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
 
 -- Handle type creation gracefully
 DO $$ 

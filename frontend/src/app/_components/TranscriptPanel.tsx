@@ -1,5 +1,6 @@
 import { VirtualizedTranscriptView } from '@/components/VirtualizedTranscriptView';
 import { PermissionWarning } from '@/components/PermissionWarning';
+import { UpcomingMeetings } from '@/components/UpcomingMeetings';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Copy, GlobeIcon } from 'lucide-react';
@@ -23,12 +24,14 @@ interface TranscriptPanelProps {
   isProcessingStop: boolean;
   isStopping: boolean;
   showModal: (name: ModalType, message?: string) => void;
+  onStartRecordingWithTitle?: (title: string) => void;
 }
 
 export function TranscriptPanel({
   isProcessingStop,
   isStopping,
-  showModal
+  showModal,
+  onStartRecordingWithTitle,
 }: TranscriptPanelProps) {
   // Contexts
   const { transcripts, transcriptContainerRef, copyTranscript } = useTranscripts();
@@ -98,6 +101,18 @@ export function TranscriptPanel({
             onRecheck={checkPermissions}
             isRechecking={isChecking}
           />
+        </div>
+      )}
+
+      {/* Upcoming calendar meetings */}
+      {!isRecording && !isProcessingStop && !isStopping && onStartRecordingWithTitle && (
+        <div className="flex justify-center px-4 pt-4">
+          <div className="w-2/3 max-w-[750px]">
+            <UpcomingMeetings
+              onStartRecording={onStartRecordingWithTitle}
+              isRecording={isRecording}
+            />
+          </div>
         </div>
       )}
 

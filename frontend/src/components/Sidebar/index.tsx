@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Mic, Square, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Upload } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Mic, Square, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Upload, BrainCircuit } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
@@ -450,24 +450,25 @@ const Sidebar: React.FC = () => {
     const isHomePage = pathname === '/';
     const isMeetingPage = pathname?.includes('/meeting-details');
     const isSettingsPage = pathname === '/settings';
+    const isAgentPage = pathname === '/agent';
 
     return (
       <TooltipProvider>
         <div className="flex flex-col items-center space-y-4 mt-4">
           <Logo isCollapsed={isCollapsed} />
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => router.push('/')}
-                className={`p-2 rounded-lg transition-colors duration-150 ${isHomePage ? 'bg-secondary' : 'hover:bg-secondary'
-                  }`}
-              >
-                <Home className="w-5 h-5 text-muted-foreground" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Home</p>
+	          <Tooltip>
+	            <TooltipTrigger asChild>
+	              <button
+	                onClick={() => router.push('/')}
+	                className={`p-2 rounded-lg transition-colors duration-150 ${isHomePage ? 'bg-secondary' : 'hover:bg-secondary'
+	                  }`}
+	              >
+	                <Home className="w-5 h-5 text-muted-foreground" />
+	              </button>
+	            </TooltipTrigger>
+	            <TooltipContent side="right">
+	              <p>Home</p>
             </TooltipContent>
           </Tooltip>
 
@@ -521,6 +522,21 @@ const Sidebar: React.FC = () => {
             </TooltipTrigger>
             <TooltipContent side="right">
               <p>Meeting Notes</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => router.push('/agent')}
+                className={`p-2 rounded-lg transition-colors duration-150 ${isAgentPage ? 'bg-secondary' : 'hover:bg-secondary'
+                  }`}
+              >
+                <BrainCircuit className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Agent Inbox</p>
             </TooltipContent>
           </Tooltip>
 
@@ -722,13 +738,22 @@ const Sidebar: React.FC = () => {
         <div className="flex-1 flex flex-col min-h-0">
           {/* Fixed navigation items */}
           <div className="flex-shrink-0">
+	            {!isCollapsed && (
+	              <div
+	                onClick={() => router.push('/')}
+	                className="p-3 text-lg font-semibold items-center hover:bg-secondary h-10 flex mx-3 mt-3 rounded-lg cursor-pointer"
+	              >
+	                <Home className="w-4 h-4 mr-2" />
+	                <span>Home</span>
+	              </div>
+	            )}
             {!isCollapsed && (
               <div
-                onClick={() => router.push('/')}
-                className="p-3 text-lg font-semibold items-center hover:bg-secondary h-10 flex mx-3 mt-3 rounded-lg cursor-pointer"
+                onClick={() => router.push('/agent')}
+                className="p-3 text-lg font-semibold items-center hover:bg-secondary h-10 flex mx-3 mt-1 rounded-lg cursor-pointer"
               >
-                <Home className="w-4 h-4 mr-2" />
-                <span>Home</span>
+                <BrainCircuit className="w-4 h-4 mr-2" />
+                <span>Agent Inbox</span>
               </div>
             )}
           </div>
@@ -801,6 +826,14 @@ const Sidebar: React.FC = () => {
                 <span>Import Audio</span>
               </button>
             )}
+
+            <button
+              onClick={() => router.push('/agent')}
+              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 text-sm font-medium text-foreground bg-secondary hover:bg-muted rounded-lg transition-colors shadow-sm"
+            >
+              <BrainCircuit className="w-4 h-4 mr-2" />
+              <span>Agent Inbox</span>
+            </button>
 
             <button
               onClick={() => router.push('/settings')}

@@ -64,8 +64,8 @@ export function SetupOverviewStep() {
     <OnboardingContainer
       title="Setup Overview"
       description="Friday requires that you download the Transcription & Summarization AI models for the software to work."
-      step={2}
-      totalSteps={isMac ? 4 : 3}
+      step={3}
+      totalSteps={isMac ? 5 : 4}
     >
       <div className="flex flex-col items-center space-y-10">
         {/* Steps Card */}

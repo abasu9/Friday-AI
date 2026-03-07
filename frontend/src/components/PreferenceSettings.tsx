@@ -6,6 +6,8 @@ import { FolderOpen } from "lucide-react"
 import { invoke } from "@tauri-apps/api/core"
 import Analytics from "@/lib/analytics"
 import AnalyticsConsentSwitch from "./AnalyticsConsentSwitch"
+import { AgentSettings } from "./AgentSettings"
+import { GoogleCalendarSettings } from "./GoogleCalendarSettings"
 import { useConfig, NotificationSettings } from "@/contexts/ConfigContext"
 
 export function PreferenceSettings() {
@@ -224,6 +226,9 @@ export function PreferenceSettings() {
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
         <AnalyticsConsentSwitch />
       </div>
+
+      <GoogleCalendarSettings />
+      <AgentSettings />
     </div>
   )
 }

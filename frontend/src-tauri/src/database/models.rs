@@ -49,7 +49,7 @@ pub struct SummaryProcess {
     pub end_time: Option<chrono::DateTime<chrono::Utc>>,
     pub chunk_count: i64,
     pub processing_time: f64,
-    pub metadata: Option<String>, // JSON
+    pub metadata: Option<String>,      // JSON
     pub result_backup: Option<String>, // Backup of result before regeneration
     pub result_backup_timestamp: Option<chrono::DateTime<chrono::Utc>>, // When backup was created
 }
@@ -101,9 +101,9 @@ pub struct Setting {
 impl Setting {
     /// Parse the custom OpenAI config from JSON string
     pub fn get_custom_openai_config(&self) -> Option<crate::summary::CustomOpenAIConfig> {
-        self.custom_openai_config.as_ref().and_then(|json| {
-            serde_json::from_str(json).ok()
-        })
+        self.custom_openai_config
+            .as_ref()
+            .and_then(|json| serde_json::from_str(json).ok())
     }
 }
 
@@ -127,4 +127,143 @@ pub struct TranscriptSetting {
     #[sqlx(rename = "openaiApiKey")]
     #[serde(rename = "openaiApiKey")]
     pub openai_api_key: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct ConnectedAccountModel {
+    pub id: String,
+    pub provider: String,
+    pub email: Option<String>,
+    pub scopes_json: String,
+    pub connection_status: String,
+    pub last_sync_at: Option<String>,
+    pub last_error: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct CalendarEventModel {
+    pub account_id: String,
+    pub provider_event_id: String,
+    pub calendar_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub organizer_email: Option<String>,
+    pub organizer_name: Option<String>,
+    pub attendees_json: Option<String>,
+    pub start_at: String,
+    pub end_at: String,
+    pub timezone: Option<String>,
+    pub conference_url: Option<String>,
+    pub status: String,
+    pub html_link: Option<String>,
+    pub raw_etag: Option<String>,
+    pub is_primary_calendar: i64,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingEventLinkModel {
+    pub meeting_id: String,
+    pub account_id: String,
+    pub provider_event_id: String,
+    pub confidence: f64,
+    pub link_method: String,
+    pub reason: Option<String>,
+    pub linked_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct CalendarSyncStateModel {
+    pub account_id: String,
+    pub sync_token: Option<String>,
+    pub window_start: Option<String>,
+    pub window_end: Option<String>,
+    pub last_sync_started_at: Option<String>,
+    pub last_sync_finished_at: Option<String>,
+    pub last_success_at: Option<String>,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentSettingModel {
+    pub id: String,
+    pub enabled: i64,
+    pub provider: String,
+    pub model: String,
+    pub notifications_enabled: i64,
+    pub calendar_proposals_enabled: i64,
+    pub heartbeat_interval_minutes: i64,
+    pub last_run_at: Option<String>,
+    pub last_success_at: Option<String>,
+    pub last_error: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentRunModel {
+    pub id: String,
+    pub trigger_type: String,
+    pub trigger_ref: Option<String>,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub model_provider: String,
+    pub model_name: String,
+    pub summary_json: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentMemoryItemModel {
+    pub id: String,
+    pub memory_type: String,
+    pub title: String,
+    pub body: String,
+    pub source_meeting_id: Option<String>,
+    pub source_calendar_event_id: Option<String>,
+    pub subject_key: String,
+    pub subject_json: Option<String>,
+    pub confidence: f64,
+    pub status: String,
+    pub first_seen_at: String,
+    pub last_seen_at: String,
+    pub created_run_id: Option<String>,
+    pub updated_run_id: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentTaskModel {
+    pub id: String,
+    pub title: String,
+    pub body: String,
+    pub source_meeting_id: Option<String>,
+    pub source_memory_item_id: Option<String>,
+    pub owner_kind: String,
+    pub due_at: Option<String>,
+    pub priority: String,
+    pub status: String,
+    pub last_suggested_at: String,
+    pub created_run_id: Option<String>,
+    pub updated_run_id: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct AgentRecommendationModel {
+    pub id: String,
+    pub recommendation_type: String,
+    pub title: String,
+    pub body: String,
+    pub rationale: String,
+    pub confidence: f64,
+    pub source_meeting_id: Option<String>,
+    pub source_calendar_event_id: Option<String>,
+    pub task_id: Option<String>,
+    pub payload_json: Option<String>,
+    pub status: String,
+    pub surfaced_at: String,
+    pub acted_at: Option<String>,
+    pub error: Option<String>,
 }

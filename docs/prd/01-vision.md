@@ -1,5 +1,11 @@
 # 01 — Vision & User Stories
 
+## Hackathon Context
+
+Built at the **Frontiers Hackathon (MIT, Google DeepMind + Breakthrough Ventures)**. FRIDAY extends an existing local-first meeting notetaker (Meetly) into an AI-native workspace orchestrator for people with ADHD.
+
+**Why Gemini**: Native Google ecosystem integration (Gmail, Calendar, Docs, Drive), fast structured JSON output via `gemini-3.0-flash`, and BYOK (Bring Your Own Key) model — aligning with the Google DeepMind partnership at this hackathon.
+
 ## Problem Statement
 
 People with ADHD don't need another productivity app. They need **overload recovery** — the ability to go from "everything is on fire, I can't even start" to "okay, here's what matters right now."
@@ -37,6 +43,9 @@ Current tools fail because they:
 ## Demo Flow (3-minute hackathon pitch)
 
 ```
+0. [Pre-demo] User authenticates Google Workspace via `gws auth login` (one-time)
+   - FRIDAY gets full workspace context: Calendar, Gmail, Drive, Docs, Tasks, and more
+
 1. [0:00] Open FRIDAY → "Good morning! Here's your day."
    - Shows: 2 urgent emails, 3 meetings, 1 overdue task
    - Proactive: "Your 1:1 with Manager is in 45 min"

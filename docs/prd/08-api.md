@@ -19,7 +19,7 @@ backend/
 │   │   ├── state.py          # FridayState definition
 │   │   ├── prompts.py        # All prompt layers
 │   │   └── tools/
-│   │       ├── google.py     # MCP Google Workspace tools
+│   │       ├── gws.py        # Google Workspace CLI wrapper tools
 │   │       ├── supabase.py   # Custom Supabase tools
 │   │       └── registry.py   # Tool-intent mapping
 │   ├── models/
@@ -31,7 +31,7 @@ backend/
 │   │   ├── heartbeat.py      # Background heartbeat loop
 │   │   └── checkpointer.py   # LangGraph Supabase checkpointer
 │   └── core/
-│       ├── auth.py           # JWT/API key auth
+│       ├── gws_runner.py     # gws CLI subprocess runner
 │       └── sse.py            # SSE streaming utilities
 ├── pyproject.toml
 └── .env
@@ -323,3 +323,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 ```
+
+## Authentication (gws CLI)
+
+Authentication is handled via the **Google Workspace CLI** (`gws`). The user authenticates once via `gws auth login` on the machine running the backend. This is a direct Google OAuth flow — no third-party auth layer needed.
+
+### Setup (one-time)
+```bash
+# Install the gws CLI
+npm install -g @googleworkspace/cli
+
+# Authenticate with Google (opens browser for OAuth consent)
+gws auth setup     # creates GCP project + OAuth client
+gws auth login     # authenticates with Google account
+```
+
+### Server-Side (FastAPI)
+```python
+import subprocess
+import json
+
+async def run_gws(command: str, dry_run: bool = False) -> dict:
+    """Execute a gws CLI command and return parsed JSON output."""
+    cmd = ["gws"] + command.split()
+    if dry_run:
+        cmd.append("--dry-run")
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+    if result.returncode != 0:
+        return {"error": result.stderr.strip(), "success": False}
+
+    try:
+        return {"data": json.loads(result.stdout), "success": True}
+    except json.JSONDecodeError:
+        return {"data": result.stdout.strip(), "success": True}
+```
+
+### `GET /auth/status` — Check gws authentication status
+
+```python
+@router.get("/auth/status")
+async def get_auth_status():
+    """Check if gws CLI is authenticated."""
+    result = subprocess.run(
+        ["gws", "gmail", "users", "getProfile", "--params", '{"userId": "me"}', "--fields", "emailAddress"],
+        capture_output=True, text=True, timeout=10
+    )
+    if result.returncode == 0:
+        data = json.loads(result.stdout)
+        return {"authenticated": True, "email": data.get("emailAddress")}
+    return {"authenticated": False, "error": "Run 'gws auth login' to authenticate"}
+```
+
+> **Note**: Google OAuth credentials are managed by `gws` (stored encrypted in `~/.config/gws/`). The backend only needs `gws` on PATH — no API keys or secrets in env vars for Google access.

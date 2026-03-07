@@ -4,17 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Friday** is a privacy-first AI meeting assistant that captures, transcribes, and summarizes meetings entirely on local infrastructure. The project consists of two main components:
+**Friday** is a privacy-first AI meeting assistant being extended into an AI-native workspace orchestrator for people with ADHD. Built at the Frontiers Hackathon (MIT, Google DeepMind + Breakthrough Ventures). The project consists of two main components:
 
 1. **Frontend**: Tauri-based desktop application (Rust + Next.js + TypeScript)
-2. **Backend**: FastAPI server for meeting storage and LLM-based summarization (Python)
+2. **Backend**: FastAPI server with LangGraph agent, Supabase, and Gemini integration (Python)
 
 ### Key Technology Stack
 - **Desktop App**: Tauri 2.x (Rust) + Next.js 14 + React 18
 - **Audio Processing**: Rust (cpal, whisper-rs, professional audio mixing)
 - **Transcription**: Whisper.cpp (local, GPU-accelerated)
-- **Backend API**: FastAPI + SQLite (aiosqlite)
-- **LLM Integration**: Ollama (local), Claude, Groq, OpenRouter
+- **Backend API**: FastAPI + Supabase Postgres
+- **LLM Integration**: Gemini (primary — gemini-3.0-flash/pro), Ollama (local fallback), Groq, OpenRouter
+- **Agent Framework**: LangGraph (custom StateGraph)
+- **Google Tools**: Composio (pre-built LangGraph-compatible Google Workspace tools)
+- **Memory/RAG**: Supermemory (semantic memory)
+- **Auth**: Supabase Auth (Google OAuth provider)
 
 ## Essential Development Commands
 

@@ -10,6 +10,7 @@ Each phase builds on the previous. Verify before moving on.
 - [ ] Initialize project: `uv init`, FastAPI, pyproject.toml
 - [ ] Set up project structure (see 08-api.md for layout)
 - [ ] Configure Supabase client (connection, env vars)
+- [ ] Install and authenticate `gws` CLI (`npm install -g @googleworkspace/cli && gws auth setup && gws auth login`)
 - [ ] Create `/health` endpoint
 - [ ] Create basic SSE streaming endpoint (`/chat/stream` that echoes)
 - [ ] Verify: `curl` the SSE endpoint, see events streaming
@@ -48,16 +49,16 @@ backend/
 - [ ] Wire up Supabase checkpointer
 - [ ] Verify: Send message → get classified intent → get response → see in DB
 
-### Phase 4: Tools — Google Workspace (Hours 5-7)
-> Agent can read emails and calendar.
+### Phase 4: Tools — Google Workspace (gws CLI) (Hours 5-7)
+> Agent can access ALL Google Workspace APIs via gws CLI.
 
-- [ ] Set up MCP Google Workspace connection
-- [ ] Implement `gmail_read_inbox` tool
-- [ ] Implement `calendar_list_events` tool
-- [ ] Implement `docs_read` tool
-- [ ] Implement `drive_search` tool
+- [ ] Implement `gws` tool wrapper (subprocess runner in `app/core/gws_runner.py`)
+- [ ] Implement `gws_schema` tool wrapper for API discovery
 - [ ] Implement `execute_tools` node in the graph
 - [ ] Wire tools to intent routing (action/triage intents trigger tools)
+- [ ] Test helper commands: `gws gmail +triage`, `gws calendar +agenda`, `gws workflow +meeting-prep`
+- [ ] Test raw API calls: `gws drive files list`, `gws docs documents get`
+- [ ] Implement approval detection for write commands (`+send`, `+insert`, etc.)
 - [ ] Verify: "What's on my calendar today?" → real calendar data returned
 
 ### Phase 5: Tools — Supabase + Task Management (Hour 7-8)
@@ -66,7 +67,10 @@ backend/
 - [ ] Implement `get_user_tasks` tool
 - [ ] Implement `create_task` / `update_task` tools
 - [ ] Implement `get_user_context` / `save_user_context` tools
+- [ ] Set up Supermemory client and memory_search / memory_store tools
+- [ ] Set up Exa client and `exa_search` tool (`langchain-exa`)
 - [ ] Verify: "Create a task to review PR" → task appears in DB
+- [ ] Verify: "What's the latest on React 19?" → web search results returned
 
 ### Phase 6: Prompt Engineering (Hour 8-9)
 > Full layered prompts produce good responses.
@@ -81,8 +85,7 @@ backend/
 ### Phase 7: Human-in-the-Loop (Hours 9-10)
 > Email sending requires approval and works end-to-end.
 
-- [ ] Implement `gmail_send` tool (with approval flag)
-- [ ] Implement `calendar_create_event` tool (with approval flag)
+- [ ] Implement approval detection for `gws gmail +send` and `gws calendar +insert`
 - [ ] Implement `human_approval` node with `interrupt_before`
 - [ ] Implement `POST /chat/approve` endpoint
 - [ ] Implement approval record storage in Supabase
@@ -128,13 +131,13 @@ Before calling it done:
 | Health endpoint | `curl localhost:8000/health` → `{"status": "ok"}` |
 | SSE streaming | `curl -N localhost:8000/chat/stream` → events flow |
 | Intent routing | Send "what's my day like?" → intent=action |
-| Email reading | Send "check my email" → real Gmail data |
-| Calendar reading | Send "what meetings today?" → real events |
+| Email reading | Send "check my email" → `gws gmail +triage` returns real data |
+| Calendar reading | Send "what meetings today?" → `gws calendar +agenda` returns real events |
 | Triage mode | Send "I'm overwhelmed" → exactly 3 priorities |
-| Email draft + approval | Send "reply to X" → draft shown → approve → sent |
+| Email draft + approval | Send "reply to X" → `gws gmail +send --dry-run` → approve → sent |
 | Proactive nudge | Upcoming event → nudge fires |
 | State persistence | Restart server → conversation history preserved |
-| Error handling | Disconnect Google → graceful error message |
+| Error handling | `gws` not authenticated → graceful error message |
 
 ## Environment Variables
 
@@ -142,13 +145,15 @@ Before calling it done:
 # .env
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_KEY=eyJ...         # Service role key (bypasses RLS)
-SUPABASE_ANON_KEY=eyJ...            # Anon key (for client-side)
 
-ANTHROPIC_API_KEY=sk-ant-...         # Claude API
+GEMINI_API_KEY=your-gemini-key       # Google Gemini API
 
-GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-...
-GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
+SUPERMEMORY_API_KEY=your-key         # Supermemory semantic memory
+
+EXA_API_KEY=your-exa-key             # Exa neural web search
+
+# Google OAuth is handled by gws CLI (gws auth login)
+# No Google API keys needed in env vars — gws manages credentials in ~/.config/gws/
 
 # Optional
 LOG_LEVEL=INFO
@@ -167,13 +172,15 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "langgraph>=0.2",
-    "langchain-anthropic>=0.3",
+    "langchain-google-genai>=2.0",
+    "google-genai>=1.0.0",
     "langchain-core>=0.3",
     "supabase>=2.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "httpx>=0.27",
     "python-dotenv>=1.0",
+    "langchain-exa>=0.2",
     "structlog>=24.0",
 ]
 ```

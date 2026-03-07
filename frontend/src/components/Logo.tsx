@@ -18,23 +18,23 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(({ isCollapsed }, re
             className="mb-2 cursor-pointer rounded-xl border border-border bg-card p-1 hover:opacity-80 transition-opacity"
           >
             <Image
-              src="/friday-logo.jpg"
+              src="/friday-mark.svg"
               alt="Friday logo"
-              width={48}
-              height={26}
-              className="h-auto w-12 object-contain"
+              width={40}
+              height={40}
+              className="h-10 w-10 rounded-xl object-contain"
             />
           </button>
         </DialogTrigger>
       ) : (
         <DialogTrigger asChild>
-          <button className="mb-2 block cursor-pointer rounded-2xl border border-border bg-card p-2 hover:opacity-80 transition-opacity">
+          <button className="mb-2 flex cursor-pointer items-center justify-center rounded-2xl border border-border bg-card p-2 hover:opacity-80 transition-opacity">
             <Image
-              src="/friday-logo.jpg"
+              src="/friday-mark.svg"
               alt="Friday logo"
-              width={176}
-              height={96}
-              className="h-auto w-44 object-contain"
+              width={64}
+              height={64}
+              className="h-16 w-16 rounded-[1.35rem] object-contain"
             />
           </button>
         </DialogTrigger>

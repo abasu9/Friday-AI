@@ -20,6 +20,7 @@ class FridayState(MessagesState):
     user_id: str
     user_context: dict = Field(default_factory=dict)       # From user_context table
     active_tasks: list[dict] = Field(default_factory=list) # Current user tasks
+    semantic_context: list[dict] = Field(default_factory=list)
 
     # --- Intent routing ---
     intent: Optional[Literal["chat", "action", "triage", "proactive"]] = None
@@ -99,7 +100,7 @@ friday_graph = graph.compile(
                       │
                       ▼
                 ┌────────────┐
-                │ preprocess │  Load user context, tasks, recent messages
+                │ preprocess │  Load context: Supabase + Supermemory
                 └─────┬──────┘
                       │
                       ▼
@@ -113,7 +114,7 @@ friday_graph = graph.compile(
             │         │          │
             │         ▼          │
             │  ┌──────────────┐  │
-            │  │execute_tools │◄─┘  Call MCP/Supabase tools
+            │  │execute_tools │◄─┘  Call gws CLI / Supabase tools
             │  └──────┬───────┘
             │         │
             ▼         ▼
@@ -144,14 +145,17 @@ friday_graph = graph.compile(
 ### preprocess
 ```python
 async def preprocess_node(state: FridayState) -> dict:
+    # Load context from Supabase (operational) + Supermemory (semantic)
     """Load all context needed for this turn."""
     user_context = await load_user_context(state["user_id"])
     active_tasks = await load_active_tasks(state["user_id"])
+    semantic_context = await supermemory_search(state["user_id"], state["messages"][-1].content)
     recent_messages = state["messages"][-20:]  # Last 20 messages for context window
 
     return {
         "user_context": user_context,
         "active_tasks": active_tasks,
+        "semantic_context": semantic_context,
         "messages": recent_messages,  # Trim for token budget
     }
 ```
@@ -251,6 +255,10 @@ async def postprocess_node(state: FridayState) -> dict:
     # Learn from interaction (update user_context)
     if state["tool_calls_made"]:
         await update_user_context(state)
+
+    # Save learned patterns to Supermemory
+    if should_save_memory(state):
+        await supermemory_store(state)
 
     return {}
 ```

@@ -3,6 +3,17 @@
     Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries. Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface.
   </p>
 </div>
+<h1><a href="https://friday-michaelnaeims-projects.vercel.app/?_vercel_share=ZhKcM7DirPn47AoBzr2bMNmVR9zcJnGn">Friday</a></h1>
+
+<p>
+    Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries. Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface.
+  </p>
+</div>
+<div align="center">
+  <img src="docs/FRIDAY_logo.jpg" width="1250" alt="Friday logo" />
+</div>
+
+
 <div align="center">
   <img src="docs/FRIDAY_logo.jpg" width="1250" alt="Friday logo" />
 </div>
@@ -43,8 +54,8 @@ Friday is meant for teams and professionals who need accurate meeting notes whil
   See transcriptions as they are produced and generate meeting summaries after meetings end.
 - **Cross-platform desktop app**  
   Built with Tauri for macOS, Windows, and Linux targets.
-- **Flexible AI provider support**  
-  Supports local and external providers for summary generation.
+- **Flexible AI provider support**
+  Gemini (primary), with support for local and external providers for summary generation.
 - **Privacy-first defaults**  
   No raw audio/notes upload required for core operation.
 
@@ -74,7 +85,7 @@ Frontend HTTP/WebSocket   <->  FastAPI backend  <->  SQLite + LLM providers
 ## Requirements
 
 - Rust (stable toolchain)
-- Node.js 20+ and `pnpm`
+- Node.js 20+ and pnpm
 - Python 3.8+ (for backend workflows)
 - On macOS: microphone + screen recording permission for full system-audio capture
 - GPU support depends on platform:
@@ -131,6 +142,7 @@ If you only need to test frontend rendering, you can run `pnpm run dev` from `fr
 
 ## Repository links
 - Website demonstration: `https://friday-9z2emymz1-michaelnaeims-projects.vercel.app/`
+- Website documentation: `tinyurl.com/2nvsk8ek`
 - Architecture details: `docs/architecture.md`
 - Build details: `docs/BUILDING.md`
 - Linux build notes: `docs/building_in_linux.md`
