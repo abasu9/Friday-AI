@@ -43,8 +43,8 @@ Current tools fail because they:
 ## Demo Flow (3-minute hackathon pitch)
 
 ```
-0. [Pre-demo] User signs in with Google (single click via Supabase Auth)
-   - FRIDAY gets full workspace context: Calendar, Gmail, Drive, Docs
+0. [Pre-demo] User authenticates Google Workspace via `gws auth login` (one-time)
+   - FRIDAY gets full workspace context: Calendar, Gmail, Drive, Docs, Tasks, and more
 
 1. [0:00] Open FRIDAY → "Good morning! Here's your day."
    - Shows: 2 urgent emails, 3 meetings, 1 overdue task
