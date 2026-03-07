@@ -1,13 +1,12 @@
 <h1>Friday</h1>
   <p>
-    Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries
+    Privacy-first AI meeting assistant for local capture, live transcription, and meeting summaries. Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface.
   </p>
 </div>
 <div align="center">
   <img src="docs/FRIDAY_logo.jpg" width="1250" alt="Friday logo" />
 </div>
 
-Friday is a native desktop app that records and summarizes meetings without shipping your raw audio or transcripts to the cloud. The product is built on a privacy-first local-first architecture with a Tauri desktop shell, Rust audio/transcription services, and a Next.js interface.
 
 <div align="center">
   <img src="docs/friday_demo.gif" width="650" alt="Friday demo" />
