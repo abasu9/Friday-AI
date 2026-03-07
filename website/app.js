@@ -47,4 +47,49 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     revealElements.forEach(el => revealObserver.observe(el));
+
+    // Video Modal Logic
+    const videoModal = document.getElementById('videoModal');
+    const closeVideoModal = document.getElementById('closeVideoModal');
+    const youtubeIframe = document.getElementById('youtubeIframe');
+    const openVideoBtns = document.querySelectorAll('.open-video-modal');
+
+    // The YouTube embed URL the user wants
+    const videoSrc = "https://www.youtube.com/embed/XqZsoesa55w?autoplay=1";
+
+    openVideoBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            youtubeIframe.src = videoSrc;
+            videoModal.classList.add('active');
+            // Disable lenis scroll when modal is open
+            lenis.stop();
+        });
+    });
+
+    function closeModal() {
+        videoModal.classList.remove('active');
+        // Stop video playback by clearing src
+        setTimeout(() => {
+            youtubeIframe.src = "";
+        }, 300); // Wait for transition to finish
+        // Resume lenis scroll
+        lenis.start();
+    }
+
+    closeVideoModal.addEventListener('click', closeModal);
+
+    // Close on background click
+    videoModal.addEventListener('click', (e) => {
+        if (e.target === videoModal) {
+            closeModal();
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && videoModal.classList.contains('active')) {
+            closeModal();
+        }
+    });
 });
