@@ -235,7 +235,7 @@ pub async fn list_upcoming_events<R: Runtime>(
         return Ok(Vec::new());
     };
 
-    if account.connection_status != "connected" {
+    if !account_allows_cached_reads(&account) {
         return Ok(Vec::new());
     }
 
@@ -1352,6 +1352,10 @@ fn account_has_write_scope(account: &ConnectedAccountModel) -> bool {
         .any(|scope| scope == GOOGLE_WRITE_SCOPE)
 }
 
+fn account_allows_cached_reads(account: &ConnectedAccountModel) -> bool {
+    account.connection_status != "disconnected"
+}
+
 fn row_to_linked_event(row: MeetingLinkedEventRow) -> LinkedCalendarEvent {
     LinkedCalendarEvent {
         provider_event_id: row.provider_event_id,
@@ -1513,5 +1517,39 @@ mod tests {
             ),
         ];
         assert!(choose_best_match(Some("Weekly Customer Sync"), &events, reference).is_none());
+    }
+
+    #[test]
+    fn cached_reads_are_allowed_while_account_is_in_error_state() {
+        let account = ConnectedAccountModel {
+            id: GOOGLE_ACCOUNT_ID.to_string(),
+            provider: GOOGLE_PROVIDER.to_string(),
+            email: Some("person@example.com".to_string()),
+            scopes_json: "[]".to_string(),
+            connection_status: "error".to_string(),
+            last_sync_at: None,
+            last_error: Some("Temporary keychain failure".to_string()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        assert!(account_allows_cached_reads(&account));
+    }
+
+    #[test]
+    fn cached_reads_are_blocked_after_disconnect() {
+        let account = ConnectedAccountModel {
+            id: GOOGLE_ACCOUNT_ID.to_string(),
+            provider: GOOGLE_PROVIDER.to_string(),
+            email: Some("person@example.com".to_string()),
+            scopes_json: "[]".to_string(),
+            connection_status: "disconnected".to_string(),
+            last_sync_at: None,
+            last_error: None,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        assert!(!account_allows_cached_reads(&account));
     }
 }

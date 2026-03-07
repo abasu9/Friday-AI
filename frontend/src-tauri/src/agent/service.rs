@@ -20,7 +20,7 @@ use crate::notifications::types::{
 use crate::state::AppState;
 use crate::summary::llm_client::{generate_summary, LLMProvider};
 use crate::summary::processor::clean_llm_markdown_output;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, Local, Utc};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -33,7 +33,6 @@ const DEFAULT_HEARTBEAT_INTERVAL_MINUTES: u64 = 5;
 const MAX_TRANSCRIPT_CHARS: usize = 12_000;
 const MAX_MEETINGS_PER_HEARTBEAT: i64 = 3;
 const MEETING_LOOKBACK_DAYS: i64 = 7;
-const CALENDAR_PREP_LOOKAHEAD_HOURS: i64 = 8;
 const GOOGLE_CALENDAR_WRITE_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -308,8 +307,7 @@ pub async fn accept_recommendation<R: Runtime>(
         .map_err(|e| format!("Failed to load recommendation: {}", e))?
         .ok_or_else(|| "Recommendation not found".to_string())?;
 
-    let mut created_calendar_event = None;
-    match recommendation.recommendation_type.as_str() {
+    let created_calendar_event = match recommendation.recommendation_type.as_str() {
         "calendar_event_draft" => {
             let payload = recommendation
                 .payload_json
@@ -328,20 +326,14 @@ pub async fn accept_recommendation<R: Runtime>(
             )
             .await
             .map_err(|e| format!("Failed to update recommendation: {}", e))?;
-            created_calendar_event = Some(created);
+            Some(created)
         }
         _ => {
-            AgentRepository::update_recommendation_status(
-                pool,
-                recommendation_id,
-                "accepted",
-                None,
-                true,
-            )
-            .await
-            .map_err(|e| format!("Failed to update recommendation: {}", e))?;
+            return Err(
+                "Only calendar event drafts can be accepted into Google Calendar".to_string(),
+            );
         }
-    }
+    };
 
     let updated = AgentRepository::get_recommendation(pool, recommendation_id)
         .await
@@ -528,10 +520,6 @@ async fn run_heartbeat<R: Runtime>(
             }
         }
 
-        if let Some(prep_recommendation) = maybe_queue_prep_recommendation(pool).await? {
-            new_recommendations.push(prep_recommendation);
-        }
-
         if settings.notifications_enabled {
             notify_new_recommendations(app, &new_recommendations).await;
         }
@@ -624,9 +612,9 @@ Schema:
   ],
   "recommendations": [
     {
-      "recommendation_type": "task_followup|calendar_event_draft|prep_prompt|general_suggestion",
-      "title": "short recommendation",
-      "body": "what Friday should surface to the user",
+      "recommendation_type": "calendar_event_draft",
+      "title": "calendar event title",
+      "body": "short summary of the event the user should create",
       "rationale": "why this matters now",
       "confidence": 0.0,
       "related_task_title": "matching task title or null",
@@ -646,7 +634,10 @@ Schema:
 
 Rules:
 - Only include durable memory that would still matter later.
-- Only create a calendar_event_draft when the meeting clearly implies scheduling or blocking time and both start_at and end_at are explicit enough to be safe.
+- Recommendations are only for new Google Calendar meetings or time blocks the user can approve.
+- If something should be tracked but not scheduled, put it in tasks instead of recommendations.
+- Create a calendar_event_draft when the conversation implies scheduling, blocking time, or making social plans (e.g., drinks, lunch, coffee) and a time is mentioned. Infer the date from context when only a time is given. If no end time is stated, default to one hour after start.
+- Both start_at and end_at must be valid RFC3339 timestamps in the user's local timezone.
 - Keep arrays short and high-signal.
 - If there is nothing useful, return empty arrays."#;
 
@@ -737,12 +728,7 @@ Rules:
         let recommendation_type =
             normalize_recommendation_type(&recommendation.recommendation_type);
         let confidence = recommendation.confidence.unwrap_or(0.7).clamp(0.0, 1.0);
-        if recommendation_type == "calendar_event_draft"
-            && (!settings.calendar_proposals_enabled || confidence < 0.80)
-        {
-            continue;
-        }
-        if recommendation_type != "calendar_event_draft" && confidence < 0.60 {
+        if recommendation_type != "calendar_event_draft" {
             continue;
         }
 
@@ -753,20 +739,14 @@ Rules:
             continue;
         }
 
-        let payload_json = if recommendation_type == "calendar_event_draft" {
-            recommendation
-                .payload
-                .as_ref()
-                .and_then(validate_calendar_draft_payload)
-                .map(|value| value.to_string())
-        } else {
-            recommendation
-                .payload
-                .as_ref()
-                .map(|value| value.to_string())
-        };
+        let payload_json = validated_calendar_recommendation_payload(
+            recommendation_type.as_str(),
+            recommendation.payload.as_ref(),
+            settings.calendar_proposals_enabled,
+            confidence,
+        );
 
-        if recommendation_type == "calendar_event_draft" && payload_json.is_none() {
+        if payload_json.is_none() {
             continue;
         }
 
@@ -820,82 +800,6 @@ Rules:
     Ok(Some(AnalysisOutcome { recommendations }))
 }
 
-async fn maybe_queue_prep_recommendation(
-    pool: &sqlx::SqlitePool,
-) -> Result<Option<AgentRecommendationModel>, String> {
-    let Some(account) = CalendarRepository::get_google_account(pool)
-        .await
-        .map_err(|e| format!("Failed to load calendar account: {}", e))?
-    else {
-        return Ok(None);
-    };
-
-    if account.connection_status != "connected" {
-        return Ok(None);
-    }
-
-    let now = Utc::now();
-    let events = CalendarRepository::list_upcoming_events(
-        pool,
-        &account.id,
-        &now.to_rfc3339(),
-        &(now + Duration::hours(CALENDAR_PREP_LOOKAHEAD_HOURS)).to_rfc3339(),
-    )
-    .await
-    .map_err(|e| format!("Failed to list upcoming events: {}", e))?;
-
-    let Some(next_event) = events.into_iter().find(|event| {
-        parse_rfc3339(event.start_at.as_str())
-            .map(|start| start > now)
-            .unwrap_or(false)
-    }) else {
-        return Ok(None);
-    };
-
-    let title = format!("Prep for {}", next_event.title);
-    if AgentRepository::find_existing_recommendation(
-        pool,
-        "prep_prompt",
-        &title,
-        None,
-        Some(&next_event.provider_event_id),
-    )
-    .await
-    .map_err(|e| format!("Failed to dedupe prep recommendation: {}", e))?
-    .is_some()
-    {
-        return Ok(None);
-    }
-
-    let start_at = parse_rfc3339(&next_event.start_at).unwrap_or(now);
-    let minutes_until = (start_at - now).num_minutes().max(0);
-    let body = format!(
-        "Review the agenda, notes, and any open follow-ups before {}.",
-        next_event.title
-    );
-    let rationale = format!("{} starts in {} minutes.", next_event.title, minutes_until);
-
-    let inserted = AgentRepository::insert_recommendation(
-        pool,
-        &InsertAgentRecommendation {
-            recommendation_type: "prep_prompt".to_string(),
-            title,
-            body,
-            rationale,
-            confidence: 0.68,
-            source_meeting_id: None,
-            source_calendar_event_id: Some(next_event.provider_event_id),
-            task_id: None,
-            payload_json: None,
-            status: "pending".to_string(),
-        },
-    )
-    .await
-    .map_err(|e| format!("Failed to save prep recommendation: {}", e))?;
-
-    Ok(Some(inserted))
-}
-
 async fn notify_new_recommendations<R: Runtime>(
     app: &AppHandle<R>,
     recommendations: &[AgentRecommendationModel],
@@ -919,22 +823,13 @@ async fn notify_new_recommendations<R: Runtime>(
             continue;
         }
 
-        let notification = match recommendation.recommendation_type.as_str() {
-            "calendar_event_draft" => Notification::new(
-                "Friday",
-                format!("Draft calendar event ready: {}", recommendation.title),
-                NotificationType::AgentCalendarProposal,
-            )
-            .with_priority(NotificationPriority::High)
-            .with_timeout(NotificationTimeout::Seconds(8)),
-            _ => Notification::new(
-                "Friday",
-                recommendation.title.clone(),
-                NotificationType::AgentRecommendation,
-            )
-            .with_priority(NotificationPriority::Normal)
-            .with_timeout(NotificationTimeout::Seconds(6)),
-        };
+        let notification = Notification::new(
+            "Friday",
+            format!("Draft calendar event ready: {}", recommendation.title),
+            NotificationType::AgentCalendarProposal,
+        )
+        .with_priority(NotificationPriority::High)
+        .with_timeout(NotificationTimeout::Seconds(8));
 
         let result = {
             let manager = manager_state.read().await;
@@ -1072,9 +967,11 @@ fn build_agent_prompt(context: &AgentMeetingContextRow, transcript: &str) -> Str
         .chars()
         .take(MAX_TRANSCRIPT_CHARS)
         .collect::<String>();
+    let local_now = Local::now();
     format!(
-        "Current time: {now}\nMeeting title: {meeting_title}\nMeeting created at: {created_at}\nLinked calendar event: {calendar_title}\nCalendar event start: {calendar_start_at}\nCalendar event end: {calendar_end_at}\nOrganizer: {organizer}\nTranscript:\n{transcript}",
-        now = Utc::now().to_rfc3339(),
+        "Current time: {now}\nUser timezone: {tz}\nMeeting title: {meeting_title}\nMeeting created at: {created_at}\nLinked calendar event: {calendar_title}\nCalendar event start: {calendar_start_at}\nCalendar event end: {calendar_end_at}\nOrganizer: {organizer}\nTranscript:\n{transcript}",
+        now = local_now.to_rfc3339(),
+        tz = local_now.format("%Z (UTC%:z)"),
         meeting_title = context.meeting_title,
         created_at = context.created_at,
         calendar_title = context.calendar_title.as_deref().unwrap_or("None"),
@@ -1181,6 +1078,24 @@ fn validate_calendar_draft_payload(value: &serde_json::Value) -> Option<serde_js
     Some(serde_json::to_value(payload).ok()?)
 }
 
+fn validated_calendar_recommendation_payload(
+    recommendation_type: &str,
+    payload: Option<&serde_json::Value>,
+    calendar_proposals_enabled: bool,
+    confidence: f64,
+) -> Option<String> {
+    if recommendation_type != "calendar_event_draft"
+        || !calendar_proposals_enabled
+        || confidence < 0.60
+    {
+        return None;
+    }
+
+    payload
+        .and_then(validate_calendar_draft_payload)
+        .map(|value| value.to_string())
+}
+
 fn parse_calendar_draft_payload(raw: &str) -> Result<CalendarEventDraftPayload, String> {
     serde_json::from_str(raw).map_err(|e| format!("Invalid calendar draft payload: {}", e))
 }
@@ -1202,7 +1117,10 @@ fn account_has_calendar_write_scope(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_agent_model_output, validate_calendar_draft_payload, HeartbeatMode};
+    use super::{
+        parse_agent_model_output, validate_calendar_draft_payload,
+        validated_calendar_recommendation_payload, HeartbeatMode,
+    };
     use serde_json::json;
 
     #[test]
@@ -1231,6 +1149,60 @@ mod tests {
             "conference_request": false
         });
         assert!(validate_calendar_draft_payload(&payload).is_none());
+    }
+
+    #[test]
+    fn rejects_non_calendar_recommendations_for_action_queue() {
+        let payload = json!({
+            "title": "Follow up",
+            "start_at": "2026-03-07T10:00:00Z",
+            "end_at": "2026-03-07T10:30:00Z",
+            "attendees": [],
+            "conference_request": false
+        });
+        assert!(validated_calendar_recommendation_payload(
+            "task_followup",
+            Some(&payload),
+            true,
+            0.95
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn requires_calendar_proposals_enabled_for_action_queue() {
+        let payload = json!({
+            "title": "Follow up review",
+            "start_at": "2026-03-07T10:00:00Z",
+            "end_at": "2026-03-07T10:30:00Z",
+            "attendees": [],
+            "conference_request": false
+        });
+        assert!(validated_calendar_recommendation_payload(
+            "calendar_event_draft",
+            Some(&payload),
+            false,
+            0.95
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn accepts_valid_calendar_draft_for_action_queue() {
+        let payload = json!({
+            "title": "Follow up review",
+            "start_at": "2026-03-07T10:00:00Z",
+            "end_at": "2026-03-07T10:30:00Z",
+            "attendees": [],
+            "conference_request": false
+        });
+        assert!(validated_calendar_recommendation_payload(
+            "calendar_event_draft",
+            Some(&payload),
+            true,
+            0.95
+        )
+        .is_some());
     }
 
     #[test]

@@ -81,12 +81,12 @@ export default function AgentInboxPage() {
       if (newPending > 0 || newTasks > 0) {
         toast.success(
           newPending > 0
-            ? `Added ${newPending} new recommendation${newPending === 1 ? "" : "s"}`
+            ? `Added ${newPending} new calendar proposal${newPending === 1 ? "" : "s"}`
             : `Added ${newTasks} new task${newTasks === 1 ? "" : "s"}`
         );
       } else {
         toast.success("Agent heartbeat finished", {
-          description: "No new recommendations were created from the latest meetings.",
+          description: "No new Google Calendar proposals were created from the latest meetings.",
         });
       }
     } catch (error) {
@@ -144,7 +144,7 @@ export default function AgentInboxPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="h-screen overflow-y-auto bg-background text-foreground">
       <div className="sticky top-0 z-10 bg-background border-b border-border">
         <div className="max-w-6xl mx-auto px-8 py-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -161,7 +161,7 @@ export default function AgentInboxPage() {
                 Agent Inbox
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Review pending recommendations, approve calendar drafts, and close open tasks.
+                Review pending Google Calendar proposals, create them, and close open tasks.
               </p>
             </div>
           </div>
@@ -191,9 +191,16 @@ export default function AgentInboxPage() {
               </div>
             )}
 
+            {status && !status.settings.calendar_proposals_enabled && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 mt-0.5" />
+                <span>Enable Calendar proposals in Settings to have the agent draft Google Calendar events here.</span>
+              </div>
+            )}
+
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-lg border border-border bg-card p-4">
-                <div className="text-sm text-muted-foreground">Pending recommendations</div>
+                <div className="text-sm text-muted-foreground">Pending calendar proposals</div>
                 <div className="text-3xl font-semibold mt-2">{status?.pending_recommendations ?? recommendations.length}</div>
               </div>
               <div className="rounded-lg border border-border bg-card p-4">
@@ -209,13 +216,13 @@ export default function AgentInboxPage() {
             <div className="grid gap-6 lg:grid-cols-[1.35fr,0.95fr]">
               <div className="rounded-lg border border-border bg-card p-5 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Recommendations</h2>
+                  <h2 className="text-lg font-semibold">Calendar proposals</h2>
                   <span className="text-sm text-muted-foreground">{recommendations.length} pending</span>
                 </div>
 
                 {recommendations.length === 0 ? (
                   <div className="rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
-                    No pending recommendations right now.
+                    No pending Google Calendar proposals right now.
                   </div>
                 ) : (
                   recommendations.map((recommendation) => (
@@ -255,7 +262,7 @@ export default function AgentInboxPage() {
                           onClick={() => acceptRecommendation(recommendation)}
                           disabled={busyRecommendationId === recommendation.id}
                         >
-                          {busyRecommendationId === recommendation.id ? "Working..." : "Accept"}
+                          {busyRecommendationId === recommendation.id ? "Creating..." : "Create in Google Calendar"}
                         </Button>
                         <Button
                           variant="outline"

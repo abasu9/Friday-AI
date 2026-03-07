@@ -8,6 +8,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { ensureSidecar } = require('./prepare-tauri-sidecar');
+const DEV_PORT = 3118;
 
 function parseEnvFile(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -52,6 +53,109 @@ function loadLocalEnv() {
   };
 }
 
+function getListeningPids(port) {
+  try {
+    const output = execSync(`lsof -tiTCP:${port} -sTCP:LISTEN`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    return output
+      .split(/\r?\n/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function getProcessCommand(pid) {
+  try {
+    return execSync(`ps -o command= -p ${pid}`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+function isNextDevProcess(commandLine, port) {
+  if (!commandLine) {
+    return false;
+  }
+
+  return (
+    commandLine.includes('next dev') ||
+    (commandLine.includes('next/dist/bin/next') &&
+      (commandLine.includes(`-p ${port}`) || commandLine.includes(` ${port}`)))
+  );
+}
+
+function sleep(ms) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    // Busy wait is acceptable here because this is a short-lived dev launcher.
+  }
+}
+
+function waitForPortToFree(port, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (getListeningPids(port).length === 0) {
+      return true;
+    }
+    sleep(100);
+  }
+
+  return getListeningPids(port).length === 0;
+}
+
+function ensureFrontendPortAvailable(port) {
+  const pids = getListeningPids(port);
+  if (pids.length === 0) {
+    return;
+  }
+
+  const owners = pids.map((pid) => ({
+    pid,
+    command: getProcessCommand(pid),
+  }));
+  const nextOwners = owners.filter(({ command }) => isNextDevProcess(command, port));
+
+  if (nextOwners.length === owners.length) {
+    console.log(`🧹 Found existing Next dev server on port ${port}; stopping it before launch.`);
+    for (const { pid } of nextOwners) {
+      try {
+        process.kill(Number(pid), 'SIGTERM');
+      } catch {
+        // Ignore races where the process exits before we signal it.
+      }
+    }
+
+    if (!waitForPortToFree(port)) {
+      console.log(`⚠️  Next dev server on port ${port} did not exit after SIGTERM; forcing it down.`);
+      for (const { pid } of nextOwners) {
+        try {
+          process.kill(Number(pid), 'SIGKILL');
+        } catch {
+          // Ignore races where the process exits before we signal it.
+        }
+      }
+    }
+
+    if (waitForPortToFree(port)) {
+      return;
+    }
+  }
+
+  const ownerDetails = owners
+    .map(({ pid, command }) => `PID ${pid}: ${command || 'unknown process'}`)
+    .join('\n');
+  console.error(`❌ Port ${port} is already in use.\n${ownerDetails}`);
+  console.error('Close the existing process or change the frontend dev port before running tauri:dev.');
+  process.exit(1);
+}
+
 const localEnv = loadLocalEnv();
 const env = {
   ...localEnv,
@@ -93,6 +197,10 @@ console.log(''); // Empty line for spacing
 
 // Platform-specific environment variables
 const platform = os.platform();
+
+if (command === 'dev') {
+  ensureFrontendPortAvailable(DEV_PORT);
+}
 
 if (platform === 'linux' && feature === 'cuda') {
   console.log('🐧 Linux/CUDA detected: Setting CMAKE flags for NVIDIA GPU');

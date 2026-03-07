@@ -40,13 +40,18 @@ function isHappeningSoon(event: UpcomingCalendarEvent): boolean {
 export function UpcomingMeetings({ onStartRecording, isRecording }: UpcomingMeetingsProps) {
   const [events, setEvents] = useState<UpcomingCalendarEvent[]>([]);
   const [connected, setConnected] = useState(false);
+  const [showingCachedEvents, setShowingCachedEvents] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
       const status = await calendarService.getStatus();
-      setConnected(status.connected);
-      if (!status.connected) {
+      const account = status.account;
+      const hasReadableCalendar =
+        account !== null && account.connection_status !== 'disconnected';
+      setConnected(hasReadableCalendar);
+      setShowingCachedEvents(account?.connection_status === 'error');
+      if (!hasReadableCalendar) {
         setEvents([]);
         return;
       }
@@ -72,6 +77,11 @@ export function UpcomingMeetings({ onStartRecording, isRecording }: UpcomingMeet
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
         <Calendar className="h-4 w-4" />
         Upcoming Meetings
+        {showingCachedEvents && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+            Cached
+          </span>
+        )}
       </div>
       <div className="space-y-2">
         {events.map((event) => {

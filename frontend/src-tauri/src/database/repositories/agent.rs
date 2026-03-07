@@ -209,9 +209,16 @@ impl AgentRepository {
     }
 
     pub async fn count_pending_recommendations(pool: &SqlitePool) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar("SELECT COUNT(*) FROM agent_recommendations WHERE status = 'pending'")
-            .fetch_one(pool)
-            .await
+        sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM agent_recommendations
+            WHERE status = 'pending'
+              AND recommendation_type = 'calendar_event_draft'
+            "#,
+        )
+        .fetch_one(pool)
+        .await
     }
 
     pub async fn count_open_tasks(pool: &SqlitePool) -> Result<i64, sqlx::Error> {
@@ -631,7 +638,19 @@ impl AgentRepository {
         pool: &SqlitePool,
         status: Option<&str>,
     ) -> Result<Vec<AgentRecommendationModel>, sqlx::Error> {
-        if let Some(status) = status {
+        if matches!(status, Some("pending")) {
+            sqlx::query_as::<_, AgentRecommendationModel>(
+                r#"
+                SELECT *
+                FROM agent_recommendations
+                WHERE status = 'pending'
+                  AND recommendation_type = 'calendar_event_draft'
+                ORDER BY surfaced_at DESC
+                "#,
+            )
+            .fetch_all(pool)
+            .await
+        } else if let Some(status) = status {
             sqlx::query_as::<_, AgentRecommendationModel>(
                 "SELECT * FROM agent_recommendations WHERE status = ? ORDER BY surfaced_at DESC",
             )

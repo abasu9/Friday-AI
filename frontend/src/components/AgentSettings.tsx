@@ -123,12 +123,12 @@ export function AgentSettings() {
       if (newPending > 0 || newTasks > 0) {
         toast.success(
           newPending > 0
-            ? `Added ${newPending} new recommendation${newPending === 1 ? "" : "s"}`
+            ? `Added ${newPending} new calendar proposal${newPending === 1 ? "" : "s"}`
             : `Added ${newTasks} new task${newTasks === 1 ? "" : "s"}`
         );
       } else {
         toast.success("Agent heartbeat finished", {
-          description: "No new recommendations were created from the latest meetings.",
+          description: "No new Google Calendar proposals were created from the latest meetings.",
         });
       }
     } catch (error) {
