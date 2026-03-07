@@ -23,6 +23,7 @@ export function GoogleCalendarSettings() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const hasAccount = Boolean(status?.account);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -156,13 +157,28 @@ export function GoogleCalendarSettings() {
 
       <div className="flex flex-wrap gap-3">
         {!status?.connected ? (
-          <Button
-            variant="blue"
-            onClick={handleConnect}
-            disabled={!status?.client_configured || isConnecting}
-          >
-            {isConnecting ? "Waiting for Google sign-in..." : "Connect Google Calendar"}
-          </Button>
+          <>
+            <Button
+              variant="blue"
+              onClick={handleConnect}
+              disabled={!status?.client_configured || isConnecting}
+            >
+              {isConnecting
+                ? "Waiting for Google sign-in..."
+                : hasAccount
+                  ? "Reconnect Google Calendar"
+                  : "Connect Google Calendar"}
+            </Button>
+            {hasAccount && (
+              <Button
+                variant="destructive"
+                onClick={handleDisconnect}
+                disabled={isDisconnecting}
+              >
+                {isDisconnecting ? "Disconnecting..." : "Clear Google Calendar connection"}
+              </Button>
+            )}
+          </>
         ) : (
           <>
             <Button variant="outline" onClick={handleSync} disabled={isSyncing || status.syncing}>

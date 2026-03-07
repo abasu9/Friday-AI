@@ -13,8 +13,8 @@ use keyring::{Entry, Error as KeyringError};
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
 use oauth2::{
-    AuthUrl, AuthorizationCode, ClientId, CsrfToken, PkceCodeChallenge, PkceCodeVerifier,
-    RedirectUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
+    PkceCodeVerifier, RedirectUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
 };
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -31,6 +31,8 @@ const GOOGLE_ACCOUNT_ID: &str = "google-primary";
 const GOOGLE_SCOPE: &str = "https://www.googleapis.com/auth/calendar.readonly";
 const TOKEN_KEYRING_SERVICE: &str = "Friday.GoogleCalendar";
 const TOKEN_KEYRING_USERNAME: &str = "google-primary";
+const MISSING_KEYCHAIN_TOKENS_ERROR: &str =
+    "Google Calendar credentials were not found in the system keychain";
 const WINDOW_PAST_HOURS: i64 = 24;
 const WINDOW_FUTURE_DAYS: i64 = 30;
 const AUTO_MATCH_WINDOW_MINUTES: i64 = 30;
@@ -167,8 +169,11 @@ pub async fn connect_google<R: Runtime>(
         .map_err(|e| format!("Failed to read OAuth callback address: {}", e))?
         .port();
 
-    let redirect_uri = format!("http://127.0.0.1:{}/google-calendar/callback", port);
-    let oauth_client = build_oauth_client(&client_id, Some(&redirect_uri))?;
+    // Google desktop OAuth expects a loopback redirect on the local listener.
+    let redirect_uri = format!("http://127.0.0.1:{}", port);
+    let client_secret = google_client_secret();
+    let oauth_client =
+        build_oauth_client(&client_id, client_secret.as_deref(), Some(&redirect_uri))?;
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     let (auth_url, csrf_state) = oauth_client
         .authorize_url(CsrfToken::new_random)
@@ -190,7 +195,7 @@ pub async fn connect_google<R: Runtime>(
         .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier.secret().to_string()))
         .request_async(async_http_client)
         .await
-        .map_err(|e| format!("Failed to exchange OAuth code: {}", e))?;
+        .map_err(|e| format!("Failed to exchange OAuth code: {:?}", e))?;
 
     let tokens = StoredOAuthTokens {
         access_token: token_response.access_token().secret().to_string(),
@@ -548,10 +553,22 @@ fn google_client_id() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn build_oauth_client(client_id: &str, redirect_uri: Option<&str>) -> Result<BasicClient, String> {
+fn google_client_secret() -> Option<String> {
+    std::env::var("FRIDAY_GOOGLE_CLIENT_SECRET")
+        .ok()
+        .or_else(|| std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET").ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn build_oauth_client(
+    client_id: &str,
+    client_secret: Option<&str>,
+    redirect_uri: Option<&str>,
+) -> Result<BasicClient, String> {
     let client = BasicClient::new(
         ClientId::new(client_id.to_string()),
-        None,
+        client_secret.map(|value| ClientSecret::new(value.to_string())),
         AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string())
             .map_err(|e| format!("Invalid Google auth URL: {}", e))?,
         Some(
@@ -644,6 +661,10 @@ async fn sync_google_calendar_inner<R: Runtime>(
         return Err("Google Calendar is not connected".to_string());
     };
 
+    if account.connection_status != "connected" {
+        return Err("Google Calendar is not connected".to_string());
+    }
+
     let now = Utc::now();
     let window_start = (now - Duration::hours(WINDOW_PAST_HOURS)).to_rfc3339();
     let window_end = (now + Duration::days(WINDOW_FUTURE_DAYS)).to_rfc3339();
@@ -665,9 +686,25 @@ async fn sync_google_calendar_inner<R: Runtime>(
     let access_token = match ensure_access_token(&account).await {
         Ok(token) => token,
         Err(err) => {
-            CalendarRepository::update_account_status(pool, &account.id, "error", Some(&err), None)
-                .await
-                .map_err(|e| format!("Failed to persist calendar auth error: {}", e))?;
+            let (next_status, next_error, user_error) = if is_missing_keychain_tokens_error(&err) {
+                (
+                    "disconnected",
+                    None,
+                    "Google Calendar session was missing. Reconnect Google Calendar.".to_string(),
+                )
+            } else {
+                ("error", Some(err.as_str()), err.clone())
+            };
+
+            CalendarRepository::update_account_status(
+                pool,
+                &account.id,
+                next_status,
+                next_error,
+                None,
+            )
+            .await
+            .map_err(|e| format!("Failed to persist calendar auth error: {}", e))?;
             CalendarRepository::upsert_sync_state(
                 pool,
                 &account.id,
@@ -676,11 +713,11 @@ async fn sync_google_calendar_inner<R: Runtime>(
                 Some(&sync_started_at),
                 Some(&Utc::now().to_rfc3339()),
                 None,
-                Some(&err),
+                Some(&user_error),
             )
             .await
             .map_err(|e| format!("Failed to persist calendar sync error: {}", e))?;
-            return Err(err);
+            return Err(user_error);
         }
     };
 
@@ -746,9 +783,8 @@ async fn sync_google_calendar_inner<R: Runtime>(
 }
 
 async fn ensure_access_token(account: &ConnectedAccountModel) -> Result<String, String> {
-    let mut stored_tokens = load_tokens()?.ok_or_else(|| {
-        "Google Calendar credentials were not found in the system keychain".to_string()
-    })?;
+    let mut stored_tokens =
+        load_tokens()?.ok_or_else(|| MISSING_KEYCHAIN_TOKENS_ERROR.to_string())?;
 
     let expires_at = stored_tokens.expires_at.as_deref().and_then(parse_rfc3339);
     let still_valid = expires_at
@@ -764,12 +800,13 @@ async fn ensure_access_token(account: &ConnectedAccountModel) -> Result<String, 
     })?;
     let client_id = google_client_id()
         .ok_or_else(|| "FRIDAY_GOOGLE_CLIENT_ID is not configured".to_string())?;
-    let oauth_client = build_oauth_client(&client_id, None)?;
+    let client_secret = google_client_secret();
+    let oauth_client = build_oauth_client(&client_id, client_secret.as_deref(), None)?;
     let token_response = oauth_client
         .exchange_refresh_token(&RefreshToken::new(refresh_token))
         .request_async(async_http_client)
         .await
-        .map_err(|e| format!("Failed to refresh Google Calendar token: {}", e))?;
+        .map_err(|e| format!("Failed to refresh Google Calendar token: {:?}", e))?;
 
     stored_tokens.access_token = token_response.access_token().secret().to_string();
     stored_tokens.refresh_token = token_response
@@ -787,6 +824,10 @@ async fn ensure_access_token(account: &ConnectedAccountModel) -> Result<String, 
     Ok(stored_tokens.access_token)
 }
 
+fn is_missing_keychain_tokens_error(err: &str) -> bool {
+    err.contains(MISSING_KEYCHAIN_TOKENS_ERROR)
+}
+
 async fn fetch_primary_calendar(access_token: &str) -> Result<GoogleCalendarResource, String> {
     let client = reqwest::Client::new();
     let response = client
@@ -797,9 +838,14 @@ async fn fetch_primary_calendar(access_token: &str) -> Result<GoogleCalendarReso
         .map_err(|e| format!("Failed to fetch primary Google Calendar: {}", e))?;
 
     if !response.status().is_success() {
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "<failed to read response body>".to_string());
         return Err(format!(
-            "Failed to fetch primary Google Calendar: HTTP {}",
-            response.status()
+            "Failed to fetch primary Google Calendar: HTTP {}: {}",
+            status, body
         ));
     }
 
@@ -829,9 +875,14 @@ async fn fetch_events(
         .map_err(|e| format!("Failed to fetch Google Calendar events: {}", e))?;
 
     if !response.status().is_success() {
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "<failed to read response body>".to_string());
         return Err(format!(
-            "Failed to fetch Google Calendar events: HTTP {}",
-            response.status()
+            "Failed to fetch Google Calendar events: HTTP {}: {}",
+            status, body
         ));
     }
 
