@@ -34,23 +34,34 @@ export function TranscriptPanel({
   onStartRecordingWithTitle,
 }: TranscriptPanelProps) {
   // Contexts
-  const { transcripts, transcriptContainerRef, copyTranscript } = useTranscripts();
+  const { transcripts, liveTranscript, transcriptContainerRef, copyTranscript } = useTranscripts();
   const { transcriptModelConfig } = useConfig();
   const { isRecording, isPaused } = useRecordingState();
   const { checkPermissions, isChecking, hasSystemAudio, hasMicrophone } = usePermissionCheck();
   const isLinux = useIsLinux();
 
   // Convert transcripts to segments for virtualized view
-  const segments = useMemo(() =>
-    transcripts.map(t => ({
+  const segments = useMemo(() => {
+    const finalizedSegments = transcripts.map(t => ({
       id: t.id,
       timestamp: t.audio_start_time ?? 0,
       endTime: t.audio_end_time,
       text: t.text,
       confidence: t.confidence,
-    })),
-    [transcripts]
-  );
+    }));
+
+    if (liveTranscript?.text.trim()) {
+      finalizedSegments.push({
+        id: liveTranscript.id,
+        timestamp: liveTranscript.audio_start_time ?? 0,
+        endTime: liveTranscript.audio_end_time,
+        text: liveTranscript.text,
+        confidence: liveTranscript.confidence,
+      });
+    }
+
+    return finalizedSegments;
+  }, [transcripts, liveTranscript]);
 
   return (
     <div ref={transcriptContainerRef} className="w-full border-r border-border bg-background flex flex-col overflow-y-auto">
@@ -126,7 +137,7 @@ export function TranscriptPanel({
               isPaused={isPaused}
               isProcessing={isProcessingStop}
               isStopping={isStopping}
-              enableStreaming={isRecording}
+              enableStreaming={isRecording && !liveTranscript}
               showConfidence={true}
             />
           </div>

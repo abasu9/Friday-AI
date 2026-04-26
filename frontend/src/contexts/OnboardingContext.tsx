@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { PermissionStatus, OnboardingPermissions } from '@/types/onboarding';
+import { disableOnboardingDemoMode, isOnboardingDemoModeEnabled } from '@/lib/onboardingDemo';
 
 const PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
 
@@ -34,6 +35,7 @@ interface ParakeetProgressInfo {
 
 interface OnboardingContextType {
   currentStep: number;
+  isDemoMode: boolean;
   processingMode: 'local' | 'hosted' | null;
   parakeetDownloaded: boolean;
   parakeetProgress: number;
@@ -63,6 +65,7 @@ interface OnboardingContextType {
   completeOnboardingHosted: (apiKey: string) => Promise<void>;
   startBackgroundDownloads: (includeGemma: boolean) => Promise<void>;
   retryParakeetDownload: () => Promise<void>;
+  exitDemoMode: () => void;
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
@@ -70,6 +73,7 @@ const OnboardingContext = createContext<OnboardingContextType | undefined>(undef
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completed, setCompleted] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(() => isOnboardingDemoModeEnabled());
   const [processingMode, setProcessingMode] = useState<'local' | 'hosted' | null>(null);
   const [parakeetDownloaded, setParakeetDownloaded] = useState(false);
   const [parakeetProgress, setParakeetProgress] = useState(0);
@@ -103,7 +107,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   // Load status on mount and initialize database
   useEffect(() => {
-    loadOnboardingStatus();
+    const demoModeEnabled = isOnboardingDemoModeEnabled();
+    setIsDemoMode(demoModeEnabled);
+    loadOnboardingStatus(demoModeEnabled);
     checkDatabaseStatus();
     initializeDatabaseInBackground();
 
@@ -189,7 +195,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
     // Don't auto-save if completed (to avoid overwriting completion status)
     // Also don't auto-save if we are currently in the process of completing
-    if (completed || isCompletingRef.current) return;
+    if (completed || isCompletingRef.current || isDemoMode) return;
 
     saveTimeoutRef.current = setTimeout(() => {
       saveOnboardingStatus();
@@ -198,7 +204,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [currentStep, parakeetDownloaded, summaryModelDownloaded, completed]);
+  }, [currentStep, parakeetDownloaded, summaryModelDownloaded, completed, isDemoMode]);
 
   // Listen to Parakeet download progress
   useEffect(() => {
@@ -301,25 +307,34 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     }
   };
 
-  const loadOnboardingStatus = async () => {
+  const loadOnboardingStatus = async (demoModeEnabled = false) => {
     try {
       const status = await invoke<OnboardingStatus | null>('get_onboarding_status');
-      if (status) {
-        console.log('[OnboardingContext] Loaded saved status:', status);
+      const baseStatus = status ?? {
+        version: '1.0',
+        completed: false,
+        current_step: 1,
+        model_status: {
+          parakeet: 'not_downloaded',
+          summary: 'not_downloaded',
+        },
+        last_updated: new Date().toISOString(),
+      };
 
-        // Don't trust saved status - verify actual model status on disk
-        const verifiedStatus = await verifyModelStatus(status);
+      console.log('[OnboardingContext] Loaded saved status:', baseStatus);
 
-        setCurrentStep(verifiedStatus.currentStep);
-        setCompleted(verifiedStatus.completed);
-        setParakeetDownloaded(verifiedStatus.parakeetDownloaded);
-        setSummaryModelDownloaded(verifiedStatus.summaryModelDownloaded);
+      // Don't trust saved status - verify actual model status on disk
+      const verifiedStatus = await verifyModelStatus(baseStatus);
 
-        console.log('[OnboardingContext] Verified status:', verifiedStatus);
+      setCurrentStep(demoModeEnabled ? 1 : verifiedStatus.currentStep);
+      setCompleted(demoModeEnabled ? false : verifiedStatus.completed);
+      setParakeetDownloaded(verifiedStatus.parakeetDownloaded);
+      setSummaryModelDownloaded(verifiedStatus.summaryModelDownloaded);
 
-        // Check if any downloads are active to restore isBackgroundDownloading state
-        await checkActiveDownloads();
-      }
+      console.log('[OnboardingContext] Verified status:', verifiedStatus, 'demoMode:', demoModeEnabled);
+
+      // Check if any downloads are active to restore isBackgroundDownloading state
+      await checkActiveDownloads();
     } catch (error) {
       console.error('[OnboardingContext] Failed to load onboarding status:', error);
     }
@@ -400,6 +415,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const completeOnboarding = async () => {
     try {
+      if (isDemoMode) {
+        disableOnboardingDemoMode();
+        setIsDemoMode(false);
+        setCompleted(true);
+        console.log('[OnboardingContext] Exiting onboarding demo mode without changing saved setup');
+        return;
+      }
+
       // Set completion flag to prevent race conditions with auto-save
       isCompletingRef.current = true;
 
@@ -427,6 +450,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const completeOnboardingHosted = async (apiKey: string) => {
     try {
+      if (isDemoMode) {
+        disableOnboardingDemoMode();
+        setIsDemoMode(false);
+        setCompleted(true);
+        console.log('[OnboardingContext] Exiting onboarding demo mode from hosted path without saving API key');
+        return;
+      }
+
       isCompletingRef.current = true;
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -500,6 +531,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     }
   };
 
+  const exitDemoMode = useCallback(() => {
+    disableOnboardingDemoMode();
+    setIsDemoMode(false);
+    window.location.reload();
+  }, []);
+
   const setPermissionStatus = useCallback((permission: keyof OnboardingPermissions, status: PermissionStatus) => {
     setPermissions((prev: OnboardingPermissions) => ({
       ...prev,
@@ -529,6 +566,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     <OnboardingContext.Provider
       value={{
         currentStep,
+        isDemoMode,
         processingMode,
         parakeetDownloaded,
         parakeetProgress,
@@ -555,6 +593,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         completeOnboardingHosted,
         startBackgroundDownloads,
         retryParakeetDownload,
+        exitDemoMode,
       }}
     >
       {children}

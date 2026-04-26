@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode, MutableRefObject } from 'react';
-import { Transcript, TranscriptUpdate } from '@/types';
+import { PartialTranscriptUpdate, Transcript, TranscriptUpdate } from '@/types';
 import { toast } from 'sonner';
 import { useRecordingState } from './RecordingStateContext';
 import { transcriptService } from '@/services/transcriptService';
@@ -10,6 +10,7 @@ import { indexedDBService } from '@/services/indexedDBService';
 
 interface TranscriptContextType {
   transcripts: Transcript[];
+  liveTranscript: Transcript | null;
   transcriptsRef: MutableRefObject<Transcript[]>
   addTranscript: (update: TranscriptUpdate) => void;
   copyTranscript: () => void;
@@ -24,8 +25,45 @@ interface TranscriptContextType {
 
 const TranscriptContext = createContext<TranscriptContextType | undefined>(undefined);
 
+function normalizeWord(word: string): string {
+  return word.toLowerCase().replace(/[^\w']/g, '');
+}
+
+function smoothPartialText(previousText: string | undefined, nextText: string, sameTurn: boolean): string {
+  const nextWords = nextText.trim().split(/\s+/).filter(Boolean);
+  if (!sameTurn || !previousText || nextWords.length === 0) {
+    return nextWords.join(' ');
+  }
+
+  const previousWords = previousText.trim().split(/\s+/).filter(Boolean);
+  if (previousWords.length === 0) {
+    return nextWords.join(' ');
+  }
+
+  let commonPrefix = 0;
+  while (
+    commonPrefix < previousWords.length &&
+    commonPrefix < nextWords.length &&
+    normalizeWord(previousWords[commonPrefix]) === normalizeWord(nextWords[commonPrefix])
+  ) {
+    commonPrefix += 1;
+  }
+
+  // Avoid jitter by only allowing the provider to rewrite the unstable tail.
+  const rewriteWindow = 4;
+  const stablePrefixLength = Math.max(0, previousWords.length - rewriteWindow);
+  if (commonPrefix >= stablePrefixLength) {
+    return nextWords.join(' ');
+  }
+
+  // If AssemblyAI revises earlier text mid-turn, keep the visible line stable.
+  // The final turn event will replace the draft with the accurate transcript.
+  return previousWords.join(' ');
+}
+
 export function TranscriptProvider({ children }: { children: ReactNode }) {
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+  const [liveTranscript, setLiveTranscript] = useState<Transcript | null>(null);
   const [meetingTitle, setMeetingTitle] = useState('+ New Call');
   const [currentMeetingId, setCurrentMeetingId] = useState<string | null>(null);
 
@@ -34,6 +72,8 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
 
   // Refs for transcript management
   const transcriptsRef = useRef<Transcript[]>(transcripts);
+  const liveTranscriptRef = useRef<Transcript | null>(liveTranscript);
+  const liveTurnOrderRef = useRef<number | null>(null);
   const isUserAtBottomRef = useRef<boolean>(true);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
   const finalFlushRef = useRef<(() => void) | null>(null);
@@ -42,6 +82,10 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     transcriptsRef.current = transcripts;
   }, [transcripts]);
+
+  useEffect(() => {
+    liveTranscriptRef.current = liveTranscript;
+  }, [liveTranscript]);
 
   // Smart auto-scroll: Track user scroll position
   useEffect(() => {
@@ -79,7 +123,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
 
       return () => clearTimeout(scrollTimeout);
     }
-  }, [transcripts]);
+  }, [transcripts, liveTranscript]);
 
   // Initialize IndexedDB and listen for recording-started/stopped events
   useEffect(() => {
@@ -180,6 +224,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
   // Main transcript buffering logic with sequence_id ordering
   useEffect(() => {
     let unlistenFn: (() => void) | undefined;
+    let unlistenPartialFn: (() => void) | undefined;
     let transcriptCounter = 0;
     let transcriptBuffer = new Map<number, Transcript>();
     let lastProcessedSequence = 0;
@@ -287,6 +332,10 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
         console.log('🔥 Setting up MAIN transcript listener during component initialization...');
         unlistenFn = await transcriptService.onTranscriptUpdate((update) => {
           const now = Date.now();
+          setLiveTranscript(null);
+          liveTranscriptRef.current = null;
+          liveTurnOrderRef.current = null;
+
           console.log('🎯 MAIN LISTENER: Received transcript update:', {
             sequence_id: update.sequence_id,
             text: update.text.substring(0, 50) + '...',
@@ -335,6 +384,27 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
           // Process buffer with minimal delay for immediate UI updates (serial workers = sequential order)
           processingTimer = setTimeout(processBufferedTranscripts, 10);
         });
+
+        unlistenPartialFn = await transcriptService.onPartialTranscriptUpdate((update: PartialTranscriptUpdate) => {
+          setLiveTranscript(prev => {
+            const sameTurn = liveTurnOrderRef.current === update.turn_order;
+            const displayText = smoothPartialText(prev?.text, update.text, sameTurn);
+            liveTurnOrderRef.current = update.turn_order;
+
+            return {
+              id: `live-draft-${update.turn_order}`,
+              text: displayText,
+              timestamp: update.timestamp,
+              sequence_id: undefined,
+              chunk_start_time: update.audio_start_time,
+              is_partial: true,
+              confidence: update.confidence,
+              audio_start_time: update.audio_start_time,
+              audio_end_time: update.audio_end_time,
+              duration: update.duration,
+            };
+          });
+        });
         console.log('✅ MAIN transcript listener setup complete');
       } catch (error) {
         console.error('❌ Failed to setup MAIN transcript listener:', error);
@@ -354,6 +424,10 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
       if (unlistenFn) {
         unlistenFn();
         console.log('🧹 CLEANUP: MAIN transcript listener cleaned up');
+      }
+      if (unlistenPartialFn) {
+        unlistenPartialFn();
+        console.log('🧹 CLEANUP: PARTIAL transcript listener cleaned up');
       }
     };
   }, [currentMeetingId]); // Add currentMeetingId dependency
@@ -483,6 +557,9 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
   // Clear transcripts (used when starting new recording)
   const clearTranscripts = useCallback(() => {
     setTranscripts([]);
+    setLiveTranscript(null);
+    liveTranscriptRef.current = null;
+    liveTurnOrderRef.current = null;
     // Don't clear currentMeetingId here - it will be set by recording-started event
   }, []);
 
@@ -511,6 +588,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
 
   const value: TranscriptContextType = {
     transcripts,
+    liveTranscript,
     transcriptsRef,
     addTranscript,
     copyTranscript,

@@ -8,7 +8,11 @@ import { Shield, Zap, Key, Loader2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 
-export function ModeSelectionStep() {
+interface ModeSelectionStepProps {
+  onComplete?: () => void;
+}
+
+export function ModeSelectionStep({ onComplete }: ModeSelectionStepProps) {
   const { goNext, setProcessingMode, completeOnboardingHosted } = useOnboarding();
   const [selected, setSelected] = useState<'local' | 'hosted' | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -28,7 +32,11 @@ export function ModeSelectionStep() {
         setProcessingMode('hosted');
         await completeOnboardingHosted(apiKey.trim());
         await new Promise(resolve => setTimeout(resolve, 100));
-        window.location.reload();
+        if (onComplete) {
+          onComplete();
+        } else {
+          window.location.reload();
+        }
       } catch (error) {
         console.error('Failed to complete hosted onboarding:', error);
         toast.error('Failed to complete setup', {

@@ -21,7 +21,11 @@ interface DownloadState {
   error?: string;
 }
 
-export function DownloadProgressStep() {
+interface DownloadProgressStepProps {
+  onComplete?: () => void;
+}
+
+export function DownloadProgressStep({ onComplete }: DownloadProgressStepProps) {
   const {
     goNext,
     selectedSummaryModel,
@@ -340,8 +344,11 @@ export function DownloadProgressStep() {
 
         // Small delay to ensure state is saved before reload
         await new Promise(resolve => setTimeout(resolve, 100));
-
-        window.location.reload();
+        if (onComplete) {
+          onComplete();
+        } else {
+          window.location.reload();
+        }
       } catch (error) {
         console.error('Failed to complete onboarding:', error);
         toast.error('Failed to complete setup', {

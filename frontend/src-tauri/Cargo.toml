@@ -157,6 +157,7 @@ tauri-plugin-store = "2.4.2"
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-updater = "2.10.0"
 tauri-plugin-process = "2.3.1"
+tokio-tungstenite = { version = "0.29.0", features = ["rustls-tls-webpki-roots"] }
 
 # macOS-specific dependencies with Metal GPU acceleration
 [target.'cfg(target_os = "macos")'.dependencies]

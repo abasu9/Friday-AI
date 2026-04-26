@@ -725,9 +725,12 @@ impl AudioCapture {
 pub struct AudioPipeline {
     receiver: mpsc::UnboundedReceiver<AudioChunk>,
     transcription_sender: mpsc::UnboundedSender<AudioChunk>,
+    hosted_transcription_sender: Option<mpsc::UnboundedSender<AudioChunk>>,
     vad_processor: ContinuousVadProcessor,
     sample_rate: u32,
     chunk_id_counter: u64,
+    mixed_chunk_id_counter: u64,
+    local_transcription_enabled: bool,
     // Performance optimization: reduce logging frequency
     last_summary_time: std::time::Instant,
     processed_chunks: u64,
@@ -744,6 +747,8 @@ impl AudioPipeline {
     pub fn new(
         receiver: mpsc::UnboundedReceiver<AudioChunk>,
         transcription_sender: mpsc::UnboundedSender<AudioChunk>,
+        hosted_transcription_sender: Option<mpsc::UnboundedSender<AudioChunk>>,
+        local_transcription_enabled: bool,
         target_chunk_duration_ms: u32,
         sample_rate: u32,
         mic_device_name: String,
@@ -803,9 +808,12 @@ impl AudioPipeline {
         Self {
             receiver,
             transcription_sender,
+            hosted_transcription_sender,
             vad_processor,
             sample_rate,
             chunk_id_counter: 0,
+            mixed_chunk_id_counter: 0,
+            local_transcription_enabled,
             // Performance optimization: reduce logging frequency
             last_summary_time: std::time::Instant::now(),
             processed_chunks: 0,
@@ -900,58 +908,80 @@ impl AudioPipeline {
                             // Previous 2x gain was causing excessive limiting/distortion
                             let mixed_with_gain = mixed_clean;
 
-                            // STEP 3: Send mixed audio for transcription (VAD + Whisper)
-                            match self.vad_processor.process_audio(&mixed_with_gain) {
-                                Ok(speech_segments) => {
-                                    for segment in speech_segments {
-                                        let duration_ms =
-                                            segment.end_timestamp_ms - segment.start_timestamp_ms;
+                            // STEP 3: Send continuous mixed audio to hosted streaming STT.
+                            // Hosted providers need audio while speech is happening so they can
+                            // emit interim transcripts before the utterance is complete.
+                            if let Some(ref sender) = self.hosted_transcription_sender {
+                                let hosted_chunk = AudioChunk {
+                                    data: mixed_with_gain.clone(),
+                                    sample_rate: self.sample_rate,
+                                    timestamp: chunk.timestamp,
+                                    chunk_id: self.mixed_chunk_id_counter,
+                                    device_type: DeviceType::Microphone,
+                                };
 
-                                        if segment.samples.len() >= 800 {
-                                            // Minimum 50ms at 16kHz - matches Parakeet capability
-                                            info!(
-                                                "📤 Sending VAD segment: {:.1}ms, {} samples",
-                                                duration_ms,
-                                                segment.samples.len()
-                                            );
-
-                                            let transcription_chunk = AudioChunk {
-                                                data: segment.samples,
-                                                sample_rate: 16000,
-                                                timestamp: segment.start_timestamp_ms / 1000.0,
-                                                chunk_id: self.chunk_id_counter,
-                                                device_type: DeviceType::Microphone, // Mixed audio
-                                            };
-
-                                            if let Err(e) =
-                                                self.transcription_sender.send(transcription_chunk)
-                                            {
-                                                warn!("Failed to send VAD segment: {}", e);
-                                            } else {
-                                                self.chunk_id_counter += 1;
-                                            }
-                                        } else {
-                                            debug!("⏭️ Dropping short VAD segment: {:.1}ms ({} samples < 800)",
-                                                   duration_ms, segment.samples.len());
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!("⚠️ VAD error: {}", e);
+                                if let Err(e) = sender.send(hosted_chunk) {
+                                    warn!("Failed to send mixed audio to hosted STT: {}", e);
                                 }
                             }
 
-                            // STEP 4: Send mixed audio for recording (WAV file)
+                            // STEP 4: Send mixed audio for local transcription (VAD + local model)
+                            if self.local_transcription_enabled {
+                                match self.vad_processor.process_audio(&mixed_with_gain) {
+                                    Ok(speech_segments) => {
+                                        for segment in speech_segments {
+                                            let duration_ms = segment.end_timestamp_ms
+                                                - segment.start_timestamp_ms;
+
+                                            if segment.samples.len() >= 800 {
+                                                // Minimum 50ms at 16kHz - matches Parakeet capability
+                                                info!(
+                                                    "📤 Sending VAD segment: {:.1}ms, {} samples",
+                                                    duration_ms,
+                                                    segment.samples.len()
+                                                );
+
+                                                let transcription_chunk = AudioChunk {
+                                                    data: segment.samples,
+                                                    sample_rate: 16000,
+                                                    timestamp: segment.start_timestamp_ms / 1000.0,
+                                                    chunk_id: self.chunk_id_counter,
+                                                    device_type: DeviceType::Microphone, // Mixed audio
+                                                };
+
+                                                if let Err(e) = self
+                                                    .transcription_sender
+                                                    .send(transcription_chunk)
+                                                {
+                                                    warn!("Failed to send VAD segment: {}", e);
+                                                } else {
+                                                    self.chunk_id_counter += 1;
+                                                }
+                                            } else {
+                                                debug!("⏭️ Dropping short VAD segment: {:.1}ms ({} samples < 800)",
+                                                       duration_ms, segment.samples.len());
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!("⚠️ VAD error: {}", e);
+                                    }
+                                }
+                            }
+
+                            // STEP 5: Send mixed audio for recording (WAV file)
                             if let Some(ref sender) = self.recording_sender_for_mixed {
                                 let recording_chunk = AudioChunk {
                                     data: mixed_with_gain.clone(),
                                     sample_rate: self.sample_rate,
                                     timestamp: chunk.timestamp,
-                                    chunk_id: self.chunk_id_counter,
+                                    chunk_id: self.mixed_chunk_id_counter,
                                     device_type: DeviceType::Microphone, // Mixed audio
                                 };
                                 let _ = sender.send(recording_chunk);
                             }
+
+                            self.mixed_chunk_id_counter += 1;
                         }
                     }
                 }
@@ -1046,6 +1076,8 @@ impl AudioPipelineManager {
         &mut self,
         state: Arc<RecordingState>,
         transcription_sender: mpsc::UnboundedSender<AudioChunk>,
+        hosted_transcription_sender: Option<mpsc::UnboundedSender<AudioChunk>>,
+        local_transcription_enabled: bool,
         target_chunk_duration_ms: u32,
         sample_rate: u32,
         recording_sender: Option<mpsc::UnboundedSender<AudioChunk>>,
@@ -1075,6 +1107,8 @@ impl AudioPipelineManager {
         let mut pipeline = AudioPipeline::new(
             audio_receiver,
             transcription_sender,
+            hosted_transcription_sender,
+            local_transcription_enabled,
             target_chunk_duration_ms,
             sample_rate,
             mic_device_name,

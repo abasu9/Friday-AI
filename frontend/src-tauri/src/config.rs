@@ -11,6 +11,12 @@ pub const DEFAULT_WHISPER_MODEL: &str = "large-v3-turbo";
 /// This is the quantized version optimized for speed.
 pub const DEFAULT_PARAKEET_MODEL: &str = "parakeet-tdt-0.6b-v3-int8";
 
+/// Default hosted streaming transcription provider.
+pub const DEFAULT_TRANSCRIPT_PROVIDER: &str = "assemblyAI";
+
+/// Default AssemblyAI streaming model. This is the lowest-cost realtime model.
+pub const DEFAULT_ASSEMBLYAI_MODEL: &str = "universal-streaming-english";
+
 /// Whisper model catalog with metadata for all supported models.
 /// Used by both WhisperEngine::discover_models() and discover_models_standalone().
 ///

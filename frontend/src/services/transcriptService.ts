@@ -7,7 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { TranscriptUpdate, Transcript } from '@/types';
+import { PartialTranscriptUpdate, TranscriptUpdate, Transcript } from '@/types';
 
 export interface TranscriptionStatus {
   chunks_in_queue: number;
@@ -55,6 +55,16 @@ export class TranscriptService {
    */
   async onTranscriptUpdate(callback: (update: TranscriptUpdate) => void): Promise<UnlistenFn> {
     return listen<TranscriptUpdate>('transcript-update', (event) => {
+      callback(event.payload);
+    });
+  }
+
+  /**
+   * Listen for hosted streaming partial transcript updates.
+   * These are mutable live drafts and should not be persisted as final transcript history.
+   */
+  async onPartialTranscriptUpdate(callback: (update: PartialTranscriptUpdate) => void): Promise<UnlistenFn> {
+    return listen<PartialTranscriptUpdate>('transcript-partial-update', (event) => {
       callback(event.payload);
     });
   }

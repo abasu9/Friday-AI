@@ -11,6 +11,7 @@ use std::sync::{
     Arc, Mutex,
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use super::{
@@ -58,6 +59,71 @@ pub struct TranscriptionStatus {
     pub last_activity_ms: u64,
 }
 
+struct HostedAssemblyAiRouting {
+    receiver: mpsc::UnboundedReceiver<super::recording_state::AudioChunk>,
+    api_key: String,
+    model: String,
+}
+
+struct TranscriptionRouting {
+    hosted_sender: Option<mpsc::UnboundedSender<super::recording_state::AudioChunk>>,
+    local_transcription_enabled: bool,
+    assemblyai: Option<HostedAssemblyAiRouting>,
+}
+
+async fn prepare_transcription_routing<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<TranscriptionRouting, String> {
+    let config = crate::api::api::api_get_transcript_config(app.clone(), app.clone().state(), None)
+        .await?
+        .unwrap_or(crate::api::api::TranscriptConfig {
+            provider: crate::config::DEFAULT_TRANSCRIPT_PROVIDER.to_string(),
+            model: crate::config::DEFAULT_ASSEMBLYAI_MODEL.to_string(),
+            api_key: None,
+        });
+
+    if transcription::is_assemblyai_provider(&config.provider) {
+        let api_key = transcription::resolve_assemblyai_api_key(app)
+            .await
+            .map_err(|e| e.to_string())?;
+        let (hosted_sender, hosted_receiver) =
+            mpsc::unbounded_channel::<super::recording_state::AudioChunk>();
+
+        Ok(TranscriptionRouting {
+            hosted_sender: Some(hosted_sender),
+            local_transcription_enabled: false,
+            assemblyai: Some(HostedAssemblyAiRouting {
+                receiver: hosted_receiver,
+                api_key,
+                model: config.model,
+            }),
+        })
+    } else {
+        Ok(TranscriptionRouting {
+            hosted_sender: None,
+            local_transcription_enabled: true,
+            assemblyai: None,
+        })
+    }
+}
+
+fn start_transcription_for_routing<R: Runtime>(
+    app: AppHandle<R>,
+    local_receiver: mpsc::UnboundedReceiver<super::recording_state::AudioChunk>,
+    routing: TranscriptionRouting,
+) -> JoinHandle<()> {
+    if let Some(assemblyai) = routing.assemblyai {
+        transcription::start_assemblyai_streaming_task(
+            app,
+            assemblyai.receiver,
+            assemblyai.api_key,
+            assemblyai.model,
+        )
+    } else {
+        transcription::start_transcription_task(app, local_receiver)
+    }
+}
+
 // ============================================================================
 // RECORDING COMMANDS
 // ============================================================================
@@ -91,11 +157,14 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
 
         // Emit error event for frontend - actionable: false to show toast instead of modal
         // (download progress is already shown in top-right toast)
-        let _ = app.emit("transcription-error", serde_json::json!({
-            "error": validation_error,
-            "userMessage": "Recording cannot start: Transcription model is still downloading. Please wait for the download to complete.",
-            "actionable": false
-        }));
+        let _ = app.emit(
+            "transcription-error",
+            serde_json::json!({
+                "error": validation_error.clone(),
+                "userMessage": format!("Recording cannot start: {}", validation_error),
+                "actionable": true
+            }),
+        );
 
         return Err(validation_error);
     }
@@ -242,9 +311,17 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         let _ = app_for_error.emit("recording-error", error.user_message());
     });
 
+    let transcription_routing = prepare_transcription_routing(&app).await?;
+
     // Start recording with resolved devices (replaces start_recording_with_defaults_and_auto_save call)
     let transcription_receiver = manager
-        .start_recording(microphone_device, system_device, auto_save)
+        .start_recording_with_transcription(
+            microphone_device,
+            system_device,
+            auto_save,
+            transcription_routing.hosted_sender.clone(),
+            transcription_routing.local_transcription_enabled,
+        )
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
 
@@ -259,8 +336,9 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     IS_RECORDING.store(true, Ordering::SeqCst);
     reset_speech_detected_flag(); // Reset for new recording session
 
-    // Start optimized parallel transcription task and store handle
-    let task_handle = transcription::start_transcription_task(app.clone(), transcription_receiver);
+    // Start the selected transcription task and store handle
+    let task_handle =
+        start_transcription_for_routing(app.clone(), transcription_receiver, transcription_routing);
     {
         let mut global_task = TRANSCRIPTION_TASK.lock().unwrap();
         *global_task = Some(task_handle);
@@ -353,11 +431,14 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
 
         // Emit error event for frontend - actionable: false to show toast instead of modal
         // (download progress is already shown in top-right toast)
-        let _ = app.emit("transcription-error", serde_json::json!({
-            "error": validation_error,
-            "userMessage": "Recording cannot start: Transcription model is still downloading. Please wait for the download to complete.",
-            "actionable": false
-        }));
+        let _ = app.emit(
+            "transcription-error",
+            serde_json::json!({
+                "error": validation_error.clone(),
+                "userMessage": format!("Recording cannot start: {}", validation_error),
+                "actionable": true
+            }),
+        );
 
         return Err(validation_error);
     }
@@ -417,9 +498,17 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         let _ = app_for_error.emit("recording-error", error.user_message());
     });
 
+    let transcription_routing = prepare_transcription_routing(&app).await?;
+
     // Start recording with specified devices and auto_save setting
     let transcription_receiver = manager
-        .start_recording(mic_device, system_device, auto_save)
+        .start_recording_with_transcription(
+            mic_device,
+            system_device,
+            auto_save,
+            transcription_routing.hosted_sender.clone(),
+            transcription_routing.local_transcription_enabled,
+        )
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
 
@@ -434,8 +523,9 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     IS_RECORDING.store(true, Ordering::SeqCst);
     reset_speech_detected_flag(); // Reset for new recording session
 
-    // Start optimized parallel transcription task and store handle
-    let task_handle = transcription::start_transcription_task(app.clone(), transcription_receiver);
+    // Start the selected transcription task and store handle
+    let task_handle =
+        start_transcription_for_routing(app.clone(), transcription_receiver, transcription_routing);
     {
         let mut global_task = TRANSCRIPTION_TASK.lock().unwrap();
         *global_task = Some(task_handle);
@@ -688,6 +778,9 @@ pub async fn stop_recording<R: Runtime>(
             } else {
                 warn!("⚠️ No Parakeet engine found to unload model");
             }
+        }
+        Some(provider) if transcription::is_assemblyai_provider(provider) => {
+            info!("☁️ AssemblyAI streaming session ended; no local model to unload");
         }
         _ => {
             // Default to Whisper

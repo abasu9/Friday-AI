@@ -25,6 +25,7 @@ import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcess
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
+import { isOnboardingDemoModeEnabled } from '@/lib/onboardingDemo'
 
 
 const sourceSans3 = Source_Sans_3({
@@ -77,6 +78,13 @@ export default function RootLayout({
   const [importFilePath, setImportFilePath] = useState<string | null>(null)
 
   useEffect(() => {
+    if (isOnboardingDemoModeEnabled()) {
+      console.log('[Layout] Onboarding demo mode enabled, showing onboarding flow')
+      setShowOnboarding(true)
+      setOnboardingCompleted(false)
+      return
+    }
+
     // Check onboarding status first
     invoke<{ completed: boolean } | null>('get_onboarding_status')
       .then((status) => {
@@ -223,11 +231,11 @@ export default function RootLayout({
   }, []);
 
   const handleOnboardingComplete = () => {
-    console.log('[Layout] Onboarding completed, reloading app')
+    console.log('[Layout] Onboarding completed, returning to home page')
     setShowOnboarding(false)
     setOnboardingCompleted(true)
-    // Optionally reload the window to ensure all state is fresh
-    window.location.reload()
+    // Navigate back to the home page after onboarding is done
+    window.location.replace('/')
   }
 
   return (

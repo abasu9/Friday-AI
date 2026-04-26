@@ -24,7 +24,7 @@ pub struct SaveTranscriptConfigRequest {
 
 pub struct SettingsRepository;
 
-// Transcript providers: localWhisper, deepgram, elevenLabs, groq, openai
+// Transcript providers: assemblyAI, localWhisper, deepgram, elevenLabs, groq, openai
 // Summary providers: openai, claude, ollama, groq, added openrouter
 // NOTE: Handle data exclusion in the higher layer as this is database abstraction layer(using SELECT *)
 
@@ -191,6 +191,7 @@ impl SettingsRepository {
         let api_key_column = match provider {
             "localWhisper" => "whisperApiKey",
             "parakeet" => return Ok(()), // Parakeet doesn't need an API key, return early
+            "assemblyAI" | "assemblyai" | "assembly_ai" => "assemblyAiApiKey",
             "deepgram" => "deepgramApiKey",
             "elevenLabs" => "elevenLabsApiKey",
             "groq" => "groqApiKey",
@@ -225,6 +226,7 @@ impl SettingsRepository {
         let api_key_column = match provider {
             "localWhisper" => "whisperApiKey",
             "parakeet" => return Ok(None), // Parakeet doesn't need an API key
+            "assemblyAI" | "assemblyai" | "assembly_ai" => "assemblyAiApiKey",
             "deepgram" => "deepgramApiKey",
             "elevenLabs" => "elevenLabsApiKey",
             "groq" => "groqApiKey",
@@ -240,7 +242,18 @@ impl SettingsRepository {
             "SELECT {} FROM transcript_settings WHERE id = '1' LIMIT 1",
             api_key_column
         );
-        let api_key = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        let api_key: Option<String> = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+
+        if matches!(provider, "assemblyAI" | "assemblyai" | "assembly_ai")
+            && api_key.as_ref().map_or(true, |key| key.is_empty())
+        {
+            if let Ok(env_key) = std::env::var("ASSEMBLY_AI_API_KEY") {
+                if !env_key.trim().is_empty() {
+                    return Ok(Some(env_key));
+                }
+            }
+        }
+
         Ok(api_key)
     }
 

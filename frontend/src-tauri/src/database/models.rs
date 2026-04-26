@@ -127,6 +127,9 @@ pub struct TranscriptSetting {
     #[sqlx(rename = "openaiApiKey")]
     #[serde(rename = "openaiApiKey")]
     pub openai_api_key: Option<String>,
+    #[sqlx(rename = "assemblyAiApiKey")]
+    #[serde(rename = "assemblyAiApiKey")]
+    pub assembly_ai_api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]

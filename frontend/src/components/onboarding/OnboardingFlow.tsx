@@ -43,10 +43,10 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   return (
     <div className="onboarding-flow">
       {currentStep === 1 && <WelcomeStep />}
-      {currentStep === 2 && <ModeSelectionStep />}
+      {currentStep === 2 && <ModeSelectionStep onComplete={onComplete} />}
       {currentStep === 3 && processingMode === 'local' && <SetupOverviewStep />}
-      {currentStep === 4 && processingMode === 'local' && <DownloadProgressStep />}
-      {currentStep === 5 && isMac && processingMode === 'local' && <PermissionsStep />}
+      {currentStep === 4 && processingMode === 'local' && <DownloadProgressStep onComplete={onComplete} />}
+      {currentStep === 5 && isMac && processingMode === 'local' && <PermissionsStep onComplete={onComplete} />}
     </div>
   );
 }

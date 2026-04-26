@@ -9,6 +9,7 @@ import AnalyticsConsentSwitch from "./AnalyticsConsentSwitch"
 import { AgentSettings } from "./AgentSettings"
 import { GoogleCalendarSettings } from "./GoogleCalendarSettings"
 import { useConfig, NotificationSettings } from "@/contexts/ConfigContext"
+import { enableOnboardingDemoMode } from "@/lib/onboardingDemo"
 
 export function PreferenceSettings() {
   const {
@@ -135,6 +136,11 @@ export function PreferenceSettings() {
     }
   };
 
+  const handleReplayOnboarding = () => {
+    enableOnboardingDemoMode();
+    window.location.reload();
+  };
+
   // Show loading only if we're actually loading and don't have cached data
   if (isLoadingPreferences && !notificationSettings && !storageLocations) {
     return <div className="max-w-2xl mx-auto p-6">Loading Preferences...</div>
@@ -225,6 +231,19 @@ export function PreferenceSettings() {
       {/* Analytics Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
         <AnalyticsConsentSwitch />
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Demo Tools</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Replay the onboarding flow for demos without deleting meetings or reinstalling models.
+        </p>
+        <button
+          onClick={handleReplayOnboarding}
+          className="inline-flex items-center rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+        >
+          Replay Onboarding
+        </button>
       </div>
 
       <GoogleCalendarSettings />

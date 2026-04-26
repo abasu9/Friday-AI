@@ -68,21 +68,21 @@ pub async fn validate_transcription_model_ready<R: Runtime>(
                 config
             }
             Ok(None) => {
-                info!("📝 No transcript config found, defaulting to parakeet");
+                info!("📝 No transcript config found, defaulting to AssemblyAI");
                 crate::api::api::TranscriptConfig {
-                    provider: "parakeet".to_string(),
-                    model: crate::config::DEFAULT_PARAKEET_MODEL.to_string(),
+                    provider: crate::config::DEFAULT_TRANSCRIPT_PROVIDER.to_string(),
+                    model: crate::config::DEFAULT_ASSEMBLYAI_MODEL.to_string(),
                     api_key: None,
                 }
             }
             Err(e) => {
                 warn!(
-                    "⚠️ Failed to get transcript config: {}, defaulting to parakeet",
+                    "⚠️ Failed to get transcript config: {}, defaulting to AssemblyAI",
                     e
                 );
                 crate::api::api::TranscriptConfig {
-                    provider: "parakeet".to_string(),
-                    model: crate::config::DEFAULT_PARAKEET_MODEL.to_string(),
+                    provider: crate::config::DEFAULT_TRANSCRIPT_PROVIDER.to_string(),
+                    model: crate::config::DEFAULT_ASSEMBLYAI_MODEL.to_string(),
                     api_key: None,
                 }
             }
@@ -147,6 +147,22 @@ pub async fn validate_transcription_model_ready<R: Runtime>(
                 }
             }
         }
+        provider if super::assemblyai_streaming::is_assemblyai_provider(provider) => {
+            info!("☁️ Validating AssemblyAI streaming transcription configuration...");
+            if !super::assemblyai_streaming::is_supported_model(&config.model) {
+                return Err(format!(
+                    "AssemblyAI model '{}' is not supported for streaming transcription.",
+                    config.model
+                ));
+            }
+
+            super::assemblyai_streaming::resolve_api_key(app)
+                .await
+                .map(|_| {
+                    info!("✅ AssemblyAI API key found; hosted streaming transcription is ready");
+                })
+                .map_err(|e| e.to_string())
+        }
         other => {
             warn!(
                 "❌ Unsupported transcription provider for local recording: {}",
@@ -177,21 +193,21 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
                 config
             }
             Ok(None) => {
-                info!("📝 No transcript config found, defaulting to parakeet");
+                info!("📝 No transcript config found, defaulting to AssemblyAI");
                 crate::api::api::TranscriptConfig {
-                    provider: "parakeet".to_string(),
-                    model: crate::config::DEFAULT_PARAKEET_MODEL.to_string(),
+                    provider: crate::config::DEFAULT_TRANSCRIPT_PROVIDER.to_string(),
+                    model: crate::config::DEFAULT_ASSEMBLYAI_MODEL.to_string(),
                     api_key: None,
                 }
             }
             Err(e) => {
                 warn!(
-                    "⚠️ Failed to get transcript config: {}, defaulting to parakeet",
+                    "⚠️ Failed to get transcript config: {}, defaulting to AssemblyAI",
                     e
                 );
                 crate::api::api::TranscriptConfig {
-                    provider: "parakeet".to_string(),
-                    model: crate::config::DEFAULT_PARAKEET_MODEL.to_string(),
+                    provider: crate::config::DEFAULT_TRANSCRIPT_PROVIDER.to_string(),
+                    model: crate::config::DEFAULT_ASSEMBLYAI_MODEL.to_string(),
                     api_key: None,
                 }
             }
@@ -230,6 +246,10 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
                 ),
             }
         }
+        provider if super::assemblyai_streaming::is_assemblyai_provider(provider) => Err(
+            "AssemblyAI uses the streaming transcription path and cannot be initialized as a local chunk engine."
+                .to_string(),
+        ),
         "localWhisper" | _ => {
             info!("🎤 Initializing Whisper transcription engine");
             let whisper_engine = get_or_init_whisper(app).await?;

@@ -66,6 +66,24 @@ impl RecordingManager {
         system_device: Option<Arc<AudioDevice>>,
         auto_save: bool,
     ) -> Result<mpsc::UnboundedReceiver<AudioChunk>> {
+        self.start_recording_with_transcription(
+            microphone_device,
+            system_device,
+            auto_save,
+            None,
+            true,
+        )
+        .await
+    }
+
+    pub async fn start_recording_with_transcription(
+        &mut self,
+        microphone_device: Option<Arc<AudioDevice>>,
+        system_device: Option<Arc<AudioDevice>>,
+        auto_save: bool,
+        hosted_transcription_sender: Option<mpsc::UnboundedSender<AudioChunk>>,
+        local_transcription_enabled: bool,
+    ) -> Result<mpsc::UnboundedReceiver<AudioChunk>> {
         info!("Starting recording manager (auto_save: {})", auto_save);
 
         // Set up transcription channel
@@ -118,6 +136,8 @@ impl RecordingManager {
         self.pipeline_manager.start(
             self.state.clone(),
             transcription_sender,
+            hosted_transcription_sender,
+            local_transcription_enabled,
             0,                      // Ignored - using dynamic sizing internally
             48000,                  // 48kHz sample rate
             Some(recording_sender), // CRITICAL: Pass recording sender to receive pre-mixed audio

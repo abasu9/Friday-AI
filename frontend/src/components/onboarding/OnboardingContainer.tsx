@@ -20,7 +20,7 @@ export function OnboardingContainer({
   canGoNext = true,
   canGoPrevious = true,
 }: OnboardingContainerProps) {
-  const { goToStep, goPrevious, goNext } = useOnboarding();
+  const { goToStep, goPrevious, goNext, isDemoMode, exitDemoMode } = useOnboarding();
 
   const handlePrevious = () => {
     if (onPrevious) {
@@ -45,6 +45,17 @@ export function OnboardingContainer({
   return (
     <div className="fixed inset-0 bg-background text-foreground flex items-center justify-center z-50 overflow-hidden">
       <div className={cn('w-full max-w-2xl h-full max-h-screen flex flex-col px-6 py-6', className)}>
+        {isDemoMode && (
+          <div className="mb-2 flex justify-end">
+            <button
+              onClick={exitDemoMode}
+              className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Exit Demo
+            </button>
+          </div>
+        )}
+
         {/* Progress Indicator with Navigation - Fixed */}
         {step && !hideProgress && (
           <div className="mb-2 relative flex-shrink-0">

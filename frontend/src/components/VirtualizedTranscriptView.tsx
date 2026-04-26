@@ -80,6 +80,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
     showConfidence: boolean;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
+    const isLiveDraft = id.startsWith('live-draft-');
 
     return (
         <div id={`segment-${id}`} className="mb-3">
@@ -97,7 +98,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
                     </TooltipContent>
                 </Tooltip>
                 <div className="flex-1">
-                    {isStreaming ? (
+                    {isStreaming || isLiveDraft ? (
                         <div className="bg-secondary border border-border rounded-lg px-3 py-2">
                             <p className="text-base text-foreground leading-relaxed">{displayText}</p>
                         </div>
